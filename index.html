@@ -567,7 +567,10 @@ const Voz = {
     this.fuente = fuentes;
     return new Promise(ok => {
       const ultima = fuentes[fuentes.length - 1];
-      ultima.onended = () => { if (mi === this.token) this.setBusy(false); ok(); };
+      let hecho = false;
+      const fin = () => { if (hecho) return; hecho = true; if (mi === this.token) this.setBusy(false); ok(); };
+      ultima.onended = fin;
+      setTimeout(fin, (t - ctx.currentTime) * 1000 + 1500); // por si el teléfono nunca avisa que terminó
     });
   },
 
@@ -818,46 +821,54 @@ function cueBend(c){
   vib(c < 0 ? 120 : [40, 60, 40]);
 }
 // ---------- Sensor de estacionar ----------
-// Un pitido con la misma nota que suena la cuerda (copia su afinación en tiempo real). Entre pitidos hay un silencio corto en el que
-// la app escucha la cuerda: así el pitido del propio teléfono no se mezcla con la guitarra, ni con parlante ni con auriculares.
-let parkNext = 0;
-const parkTail = () => analyser ? analyser.fftSize / ctx.sampleRate * 1000 + 25 : 0;   // lo que dura la ventana de análisis
-const parkGap = () => (analyser ? parkTail() : 25) + 60;                              // silencio mínimo para escuchar
+// Un pitido con la misma nota que suena la cuerda, siguiéndola en tiempo real. Para que lo que sale del parlante no se mezcle
+// con la guitarra, el pitido suena varias octavas más arriba (la misma nota, más aguda) y el micrófono pasa por un filtro que
+// deja entrar solo la zona de la cuerda. Así se puede escuchar la cuerda mientras suena el pitido, sin huecos ni realimentación.
+let parkOsc = null, parkGain = null, parkNext = 0, parkFc = 700;
+function parkBand(){   // hasta dónde deja pasar el filtro del micrófono, según el instrumento
+  const t = tuning(), top = t.s.length ? midiToHz(Math.max(...t.s)) : 800;
+  parkFc = Math.max(600, Math.min(1300, top * 1.6));
+}
+function beepHz(f){ const lo = parkFc * 2; while (f < lo) f *= 2; while (f >= lo * 2) f /= 2; return f; }
 // Floja: siempre lento, y se acelera al subir. Alta: siempre rápido, y se frena al bajar. Los dos convergen a la misma
-// velocidad cerca de la afinación y ahí pasa a nota continua. Lo más rápido posible lo limita el silencio para escuchar.
-const parkOn = P => Math.max(0.045, Math.min(0.09, P * 0.0003));
+// velocidad cerca de la afinación; ahí los pitidos se detienen y suena una campanita.
 function parkPeriod(c){
   const tol = +S.tol, k = Math.max(0, Math.min(1, (Math.abs(c) - tol) / (60 - tol)));
-  const near = 420, slow = 1100, fast = parkOn(0) * 1000 + parkGap();
+  const near = 450, slow = 1100, fast = 130;
   return c < 0 ? near + (slow - near) * k : near - (near - fast) * k;
 }
-function parkTone(freq, dur, when){
-  const c = ensureCtx(), t0 = c.currentTime + when;
-  const o = c.createOscillator(), g = c.createGain();
-  o.type = "triangle"; o.frequency.value = freq;
-  g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(0.3, t0 + 0.006);
-  g.gain.setValueAtTime(0.3, t0 + dur - 0.008); g.gain.linearRampToValueAtTime(0, t0 + dur);
-  o.connect(g).connect(c.destination); o.start(t0); o.stop(t0 + dur + 0.01);
-  muteUntil = Math.max(muteUntil, performance.now() + (when + dur) * 1000 + parkTail());
-  if (window.__beeps) window.__beeps.push({t: performance.now() + when * 1000, f: freq, d: dur});
+const parkOn = P => Math.max(0.04, Math.min(0.09, P * 0.0003));
+function parkOpen(){
+  if (parkOsc) return;
+  const c = ensureCtx(); parkOsc = c.createOscillator(); parkGain = c.createGain();
+  parkOsc.type = "sine"; parkGain.gain.value = 0; parkOsc.connect(parkGain).connect(c.destination); parkOsc.start();
 }
+function parkClose(){ try { parkOsc && parkOsc.stop(); } catch(e) {} parkOsc = parkGain = null; }
+function parkSilence(){ if (parkGain){ parkGain.gain.cancelScheduledValues(0); parkGain.gain.setTargetAtTime(0, ctx.currentTime, 0.01); } }
 function parkTick(){
-  if (!running || S.guide !== "park" || !S.beep) return;
-  const now = performance.now();
-  if (!target || cents === null || now - lastSignal > 2500){ parkNext = 0; return; }
+  if (!running || S.guide !== "park" || !S.beep || !target || cents === null || inTune || performance.now() - lastSignal > 700){ parkSilence(); return; }
+  parkOpen();
+  const now = performance.now(), c = ctx, f = beepHz(midiToHz(target.midi) * Math.pow(2, cents / 1200));
+  parkOsc.frequency.setTargetAtTime(f, c.currentTime, 0.015);   // el pitido acompaña la cuerda en tiempo real
   if (now < parkNext) return;
-  const gap = parkGap();
-  if (inTune){ // afinada: nota continua, con un respiro mínimo para seguir escuchando
-    parkTone(audible(midiToHz(target.midi)), 0.9, 0.02);
-    parkNext = now + 900 + gap; return;
-  }
-  const P = parkPeriod(cents), on = parkOn(P);
-  parkTone(audible(midiToHz(target.midi)) * Math.pow(2, cents / 1200), on, 0.02);   // la nota exacta que suena ahora
-  parkNext = now + Math.max(P, on * 1000 + gap);
+  const P = parkPeriod(cents), on = parkOn(P), t0 = c.currentTime + 0.01, g = parkGain.gain;
+  g.cancelScheduledValues(t0); g.setValueAtTime(0, t0); g.linearRampToValueAtTime(0.22, t0 + 0.006);
+  g.setValueAtTime(0.22, t0 + on - 0.01); g.linearRampToValueAtTime(0, t0 + on);
+  parkNext = now + P;
+  if (window.__beeps) window.__beeps.push({t: now, f, d: on});
+}
+// Campanita de "afinada": dos notas que suben, distinta de los pitidos.
+function chime(){
+  const c = ensureCtx(), t0 = c.currentTime + 0.02;
+  [[1046.5, 0, 0.18], [1568, 0.16, 0.7]].forEach(([f, dt, d]) => {
+    const o = c.createOscillator(), g = c.createGain(); o.type = "sine"; o.frequency.value = f;
+    g.gain.setValueAtTime(0, t0 + dt); g.gain.linearRampToValueAtTime(0.3, t0 + dt + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dt + d);
+    o.connect(g).connect(c.destination); o.start(t0 + dt); o.stop(t0 + dt + d + 0.02);
+  });
 }
 // Arrival: in bend mode the tuned note stays fixed; in both modes the phone vibrates.
 function cueInTune(){
-  if (S.beep && S.guide !== "park"){ tone(audible(midiToHz(target.midi)), 0.9, "triangle", 0.3); }
+  if (S.beep){ if (S.guide === "park") chime(); else tone(audible(midiToHz(target.midi)), 0.9, "triangle", 0.3); }
   vib([400, 120, 400]);
 }
 function playReference(m){
@@ -902,10 +913,10 @@ function yin(x, sr, minF, maxF){
 // ---------- Tracking state ----------
 let running = false, practice = false, simCents = 0, simMidi = 40;
 let hist = [], cents = null, target = null, lastTargetKey = null, pendingKey = null, pendingCount = 0;
-let ptimer = null, lastFarSay = 0, inTune = false, inTuneSince = 0, lastSignal = 0, nextBeep = 0, lastAuto = 0, timer = null, wake = null;
+let lastF = 0, jump = 0, ptimer = null, lastFarSay = 0, inTune = false, inTuneSince = 0, lastSignal = 0, nextBeep = 0, lastAuto = 0, timer = null, wake = null;
 
 function resetTracking(){
-  hist = []; cents = null; target = null; lastTargetKey = null; pendingKey = null; pendingCount = 0; inTune = false;
+  hist = []; lastF = 0; jump = 0; cents = null; target = null; lastTargetKey = null; pendingKey = null; pendingCount = 0; inTune = false;
   if (practice) startPracticeString();
   if (!running) drawIdle();
 }
@@ -931,7 +942,7 @@ function analyse(){
   if (practice){
     f = midiToHz(simMidi) * Math.pow(2, simCents / 1200);
   } else {
-    if (now < muteUntil || speaking) return;
+    if (now < muteUntil || (speaking && !quiet())) return;
     analyser.getFloatTimeDomainData(buf);
     let rms = 0; for (let i = 0; i < buf.length; i++) rms += buf[i] * buf[i];
     rms = Math.sqrt(rms / buf.length);
@@ -943,19 +954,21 @@ function analyse(){
     }
   }
   if (f <= 0){
-    if (now - lastSignal > 700 && cents !== null){ hist = []; cents = null; inTune = false; pendingKey = null; drawWaiting(); }
+    if (now - lastSignal > 700 && cents !== null){ hist = []; lastF = 0; cents = null; inTune = false; pendingKey = null; drawWaiting(); }
     return;
   }
-  lastSignal = now;
+  // Un salto brusco (de una octava, de otra nota) no es una cuerda que se afina: se confirma con varias lecturas seguidas.
+  if (lastF > 0 && Math.abs(1200 * Math.log2(f / lastF)) > 120 && ++jump < 3) return;
+  jump = 0; lastF = f; lastSignal = now;
   const HN = quiet() ? 3 : 5;
   hist.push(f); if (hist.length > HN) hist.shift();
   const fm = hist.slice().sort((a, b) => a - b)[Math.floor(hist.length / 2)];
   const tg = chooseTarget(fm);
   const c = 1200 * Math.log2(fm / midiToHz(tg.midi));
-  if (Math.abs(c) > 350 && !quiet()){
+  if (Math.abs(c) > 350){
     drawFar(fm);
     // Far from every string: say what it hears, at most every 4 s, so a blind user is never left in silence.
-    if (now - lastFarSay > 4000){ lastFarSay = now; say(["escucho", noteKey(Math.round(hzToMidi(fm))), "lejos_de", ...stringParts(tg), noteKey(tg.midi)]); }
+    if (!quiet() && now - lastFarSay > 4000){ lastFarSay = now; say(["escucho", noteKey(Math.round(hzToMidi(fm))), "lejos_de", ...stringParts(tg), noteKey(tg.midi)]); }
     return;
   }
   const key = tg.idx + ":" + tg.midi;
@@ -1039,7 +1052,10 @@ async function start(silent){
     const t = tuning();   // ventana más corta (más rápida) salvo para graves de bajo, que necesitan una más larga
     analyser = ctx.createAnalyser(); analyser.fftSize = t.s.length && midiToHz(Math.min(...t.s)) < 65 ? 4096 : 2048;
     buf = new Float32Array(analyser.fftSize);
-    src.connect(analyser);
+    // Filtro de la entrada: solo pasa la zona de la cuerda, así el pitido agudo del parlante casi no entra.
+    parkBand(); let node = src;
+    for (let i = 0; i < 3; i++){ const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = parkFc; lp.Q.value = 0.7; node.connect(lp); node = lp; }
+    node.connect(analyser);
   } else startPracticeString();
   try { wake = await navigator.wakeLock?.request("screen"); } catch(e) {}
   running = true; resetTracking(); drawWaiting();
@@ -1049,7 +1065,7 @@ async function start(silent){
   return true;
 }
 function stop(silent){
-  running = false; clearInterval(timer); clearInterval(ptimer); analyser = null;
+  running = false; clearInterval(timer); clearInterval(ptimer); parkClose(); analyser = null;
   if (stream){ stream.getTracks().forEach(t => t.stop()); stream = null; }
   try { wake && wake.release(); } catch(e) {}
   $("startBtn").textContent = practice ? T("btn_practica") : T("btn_empezar");
@@ -1286,6 +1302,7 @@ tapEl.addEventListener("click", () => {
 });
 setTap("hint_empezar", "aria_empezar");
 
+window.__estado = () => ({cents, midi: target ? target.midi : null, inTune});   // para las pruebas automáticas
 applyI18n();
 drawIdle();
 })();

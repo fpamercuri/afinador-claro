@@ -145,6 +145,6 @@
  "pregunta_afin_uke": "Regular or baritone ukulele?",
  "no_entendi_afin": "Sorry, I didn't catch that. Tell me the tuning, or say standard.",
  "a4_rango": "I can't use that reference. Say a number between four hundred fifteen and four hundred sixty-six.",
- "intro_park": "When you play a string, I'll make a beep with the same note that's sounding, and it changes as you turn the tuning peg. If the string is flat, the beeps are slow, and they speed up as you raise it. If it's sharp, the beeps are fast, and they slow down as you lower it. When it reaches the right pitch, you'll hear one continuous note and the phone vibrates. From now on I won't speak. To talk to me, tap the screen. Play a string.",
+ "intro_park": "When you play a string, I'll make a beep with the same note that's sounding, but higher so I don't get confused with your guitar. It changes as you turn the tuning peg. If the string is flat, the beeps are slow, and they speed up as you raise it. If it's sharp, the beeps are fast, and they slow down as you lower it. When it reaches the right pitch, the beeps stop, a little bell rings and the phone vibrates. From now on I won't speak. To talk to me, tap the screen. Play a string.",
  "intro_park_corto": "Play a string. I won't talk now, follow the beeps. To change something, tap the screen."
 }

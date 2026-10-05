@@ -145,6 +145,6 @@
  "pregunta_afin_uke": "Ukulele comum ou barítono?",
  "no_entendi_afin": "Não entendi. Diga a afinação, ou diga padrão.",
  "a4_rango": "Não posso usar essa referência. Diga um número entre quatrocentos e quinze e quatrocentos e sessenta e seis.",
- "intro_park": "Quando você tocar uma corda, vou fazer um bipe com a mesma nota que está soando, e ele muda enquanto você gira a tarraxa. Se a corda estiver baixa, os bipes são lentos e aceleram conforme você sobe. Se estiver alta, são rápidos e desaceleram conforme você desce. Quando chegar na afinação certa, fica uma nota contínua e o celular vibra. A partir de agora não falo mais. Para falar comigo, toque na tela. Toque uma corda.",
+ "intro_park": "Quando você tocar uma corda, vou fazer um bipe com a mesma nota que está soando, mas mais agudo para não me confundir com o seu violão. Ele muda enquanto você gira a tarraxa. Se a corda estiver baixa, os bipes são lentos e aceleram conforme você sobe. Se estiver alta, são rápidos e desaceleram conforme você desce. Quando chegar na afinação certa, os bipes param, toca um sininho e o celular vibra. A partir de agora não falo mais. Para falar comigo, toque na tela. Toque uma corda.",
  "intro_park_corto": "Toque uma corda. Não falo mais, guie-se pelos bipes. Para mudar algo, toque na tela."
 }
