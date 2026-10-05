@@ -10,7 +10,7 @@
  "tip_pausa": "Si querés cambiar algo, tocá la pantalla y hablame.",
  "pausa": "Pausa. Decime qué querés. Por ejemplo: seguir, cuánto falta, otro instrumento, otro modo, o terminar.",
  "pregunta_modo": "¿Cómo te guío? Con sensor de estacionar, o con bend.",
- "pregunta_a4": "¿Qué referencia para el La? Decime un número entre cuatrocientos quince y cuatrocientos sesenta y seis.",
+ "pregunta_a4": "¿Qué referencia usamos para el La? Decí estándar, que es cuatrocientos cuarenta, o el número que quieras, por ejemplo cuatrocientos treinta y nueve.",
  "la_en": "La en",
  "w_400": "cuatrocientos",
  "w_hercios": "hercios.",
@@ -143,5 +143,8 @@
  "pregunta_afin_gtr": "¿En qué afinación?",
  "pregunta_afin_bass": "¿De cuántas cuerdas?",
  "pregunta_afin_uke": "¿Ukelele común o barítono?",
- "no_entendi_afin": "No te entendí. Decime la afinación, o decí estándar."
+ "no_entendi_afin": "No te entendí. Decime la afinación, o decí estándar.",
+ "a4_rango": "Esa referencia no la puedo usar. Decime un número entre cuatrocientos quince y cuatrocientos sesenta y seis.",
+ "intro_park": "Cuando toques una cuerda, voy a hacer un pitido con la misma nota que suena, y va cambiando mientras girás la clavija. Si la cuerda está floja, los pitidos son lentos, y se aceleran a medida que la subís. Si está alta, son rápidos, y se frenan a medida que la bajás. Cuando llega a la afinación justa, queda una nota continua y el teléfono vibra. Desde ahora no hablo más. Para hablarme, tocá la pantalla. Tocá una cuerda.",
+ "intro_park_corto": "Tocá una cuerda. No hablo más, guiate por los pitidos. Para cambiar algo, tocá la pantalla."
 }

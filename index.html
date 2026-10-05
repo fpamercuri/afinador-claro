@@ -429,6 +429,10 @@ function parse(text, lang) {
   if (a.hasExact(...L.parkPair[0]) && a.has(...L.parkPair[1])) out.mode = "park";
 
   out.a4 = parseA4(a, text, L);
+  // "estándar" sirve para decir la referencia normal (440); un número fuera de rango se avisa aparte.
+  out.std = std;
+  const dd = (strip(text).match(/\b(\d{3})\b/) || [])[1];
+  out.a4Out = out.a4 === null && !!dd && +dd >= 100;
 
   // Órdenes.
   const w = (...x) => a.has(...x);
@@ -795,8 +799,9 @@ Voz.init({lang:S.lang, getCtx:ensureCtx, vivo:live,
   onBusy:b => { speaking = b; if (!b) muteUntil = performance.now() + 150; }})
   .then(ok => { vozClips = ok; if (ok) Voz.precargar(); });
 const vib = p => { if (S.vib && "vibrate" in navigator) { try { navigator.vibrate(p); } catch(e) {} } };
-// Moves a phone-audible copy of the played note into the 220-880 Hz range, keeping the cents offset.
-function audible(f){ while (f < 220) f *= 2; while (f > 880) f /= 2; return f; }
+// Moves a phone-audible copy of the played note into the 100-800 Hz range, keeping the cents offset.
+// Solo se sube de octava lo que el parlante no puede reproducir (el Mi grave de la guitarra, el bajo).
+function audible(f){ while (f < 100) f *= 2; while (f > 800) f /= 2; return f; }
 // Bend cue: starts at the pitch you played and glides to the tuned pitch.
 function cueBend(c){
   const tgt = audible(midiToHz(target.midi)), from = tgt * Math.pow(2, c / 1200);
@@ -812,14 +817,47 @@ function cueBend(c){
   muteUntil = Math.max(muteUntil, performance.now() + (dur + 0.06) * 1000 + 80);
   vib(c < 0 ? 120 : [40, 60, 40]);
 }
-// Parking-sensor cue: a short beep at the pitch you are playing right now.
-function cuePark(c){
-  if (S.beep) tone(audible(midiToHz(target.midi)) * Math.pow(2, c / 1200), 0.09, "triangle", 0.3);
-  vib(c < 0 ? 120 : [40, 60, 40]);
+// ---------- Sensor de estacionar ----------
+// Un pitido con la misma nota que suena la cuerda (copia su afinación en tiempo real). Entre pitidos hay un silencio corto en el que
+// la app escucha la cuerda: así el pitido del propio teléfono no se mezcla con la guitarra, ni con parlante ni con auriculares.
+let parkNext = 0;
+const parkTail = () => analyser ? analyser.fftSize / ctx.sampleRate * 1000 + 25 : 0;   // lo que dura la ventana de análisis
+const parkGap = () => (analyser ? parkTail() : 25) + 60;                              // silencio mínimo para escuchar
+// Floja: siempre lento, y se acelera al subir. Alta: siempre rápido, y se frena al bajar. Los dos convergen a la misma
+// velocidad cerca de la afinación y ahí pasa a nota continua. Lo más rápido posible lo limita el silencio para escuchar.
+const parkOn = P => Math.max(0.045, Math.min(0.09, P * 0.0003));
+function parkPeriod(c){
+  const tol = +S.tol, k = Math.max(0, Math.min(1, (Math.abs(c) - tol) / (60 - tol)));
+  const near = 420, slow = 1100, fast = parkOn(0) * 1000 + parkGap();
+  return c < 0 ? near + (slow - near) * k : near - (near - fast) * k;
 }
-// Arrival: the tuned note stays fixed and the phone vibrates, in both modes.
+function parkTone(freq, dur, when){
+  const c = ensureCtx(), t0 = c.currentTime + when;
+  const o = c.createOscillator(), g = c.createGain();
+  o.type = "triangle"; o.frequency.value = freq;
+  g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(0.3, t0 + 0.006);
+  g.gain.setValueAtTime(0.3, t0 + dur - 0.008); g.gain.linearRampToValueAtTime(0, t0 + dur);
+  o.connect(g).connect(c.destination); o.start(t0); o.stop(t0 + dur + 0.01);
+  muteUntil = Math.max(muteUntil, performance.now() + (when + dur) * 1000 + parkTail());
+  if (window.__beeps) window.__beeps.push({t: performance.now() + when * 1000, f: freq, d: dur});
+}
+function parkTick(){
+  if (!running || S.guide !== "park" || !S.beep) return;
+  const now = performance.now();
+  if (!target || cents === null || now - lastSignal > 2500){ parkNext = 0; return; }
+  if (now < parkNext) return;
+  const gap = parkGap();
+  if (inTune){ // afinada: nota continua, con un respiro mínimo para seguir escuchando
+    parkTone(audible(midiToHz(target.midi)), 0.9, 0.02);
+    parkNext = now + 900 + gap; return;
+  }
+  const P = parkPeriod(cents), on = parkOn(P);
+  parkTone(audible(midiToHz(target.midi)) * Math.pow(2, cents / 1200), on, 0.02);   // la nota exacta que suena ahora
+  parkNext = now + Math.max(P, on * 1000 + gap);
+}
+// Arrival: in bend mode the tuned note stays fixed; in both modes the phone vibrates.
 function cueInTune(){
-  if (S.beep){ tone(audible(midiToHz(target.midi)), 0.9, "triangle", 0.3); }
+  if (S.beep && S.guide !== "park"){ tone(audible(midiToHz(target.midi)), 0.9, "triangle", 0.3); }
   vib([400, 120, 400]);
 }
 function playReference(m){
@@ -864,7 +902,7 @@ function yin(x, sr, minF, maxF){
 // ---------- Tracking state ----------
 let running = false, practice = false, simCents = 0, simMidi = 40;
 let hist = [], cents = null, target = null, lastTargetKey = null, pendingKey = null, pendingCount = 0;
-let lastFarSay = 0, inTune = false, inTuneSince = 0, lastSignal = 0, nextBeep = 0, lastAuto = 0, timer = null, wake = null;
+let ptimer = null, lastFarSay = 0, inTune = false, inTuneSince = 0, lastSignal = 0, nextBeep = 0, lastAuto = 0, timer = null, wake = null;
 
 function resetTracking(){
   hist = []; cents = null; target = null; lastTargetKey = null; pendingKey = null; pendingCount = 0; inTune = false;
@@ -886,6 +924,7 @@ const centsParts = c => Math.abs(c) <= +S.tol ? ["w_afinado"]
   : ["num_" + Math.min(66, Math.round(Math.abs(c))), "w_cents", c < 0 ? "w_grave" : "w_agudo"];
 const readParts = (tg, c) => [...stringParts(tg), noteKey(tg.midi), ...centsParts(c)];
 
+const quiet = () => S.guide === "park"; // en estacionar la voz no habla mientras se afina: solo pitidos
 function analyse(){
   const now = performance.now();
   let f = -1;
@@ -908,11 +947,12 @@ function analyse(){
     return;
   }
   lastSignal = now;
-  hist.push(f); if (hist.length > 5) hist.shift();
+  const HN = quiet() ? 3 : 5;
+  hist.push(f); if (hist.length > HN) hist.shift();
   const fm = hist.slice().sort((a, b) => a - b)[Math.floor(hist.length / 2)];
   const tg = chooseTarget(fm);
   const c = 1200 * Math.log2(fm / midiToHz(tg.midi));
-  if (Math.abs(c) > 350){
+  if (Math.abs(c) > 350 && !quiet()){
     drawFar(fm);
     // Far from every string: say what it hears, at most every 4 s, so a blind user is never left in silence.
     if (now - lastFarSay > 4000){ lastFarSay = now; say(["escucho", noteKey(Math.round(hzToMidi(fm))), "lejos_de", ...stringParts(tg), noteKey(tg.midi)]); }
@@ -922,25 +962,24 @@ function analyse(){
   // Announce a new note only after it holds for 3 frames, so passing noise does not trigger speech.
   if (key !== lastTargetKey){
     if (key === pendingKey) pendingCount++; else { pendingKey = key; pendingCount = 1; }
-    if (pendingCount < 3) return;
+    if (pendingCount < (quiet() ? 2 : 3)) return;
     lastTargetKey = key; target = tg; cents = c; inTune = false;
-    say(readParts(tg, c));
-    nextBeep = now + 900; lastAuto = now;
+    if (!quiet()) say(readParts(tg, c));
+    nextBeep = now + 900; lastAuto = now; parkNext = 0;
   }
   target = tg;
-  cents = cents === null ? c : cents + 0.35 * (c - cents);
+  cents = cents === null ? c : cents + (quiet() ? 0.6 : 0.35) * (c - cents);
   const tol = +S.tol;
   if (!inTune && Math.abs(cents) <= tol){
     if (!inTuneSince) inTuneSince = now;
-    if (now - inTuneSince > 300){ inTune = true; cueInTune(); say(["w_afinado"]); }
+    if (now - inTuneSince > (quiet() ? 200 : 300)){ inTune = true; parkNext = 0; cueInTune(); if (!quiet()) say(["w_afinado"]); }
   } else if (Math.abs(cents) > tol) inTuneSince = 0;
-  if (inTune && Math.abs(cents) > tol + 3){ inTune = false; inTuneSince = 0; }
-  if (!inTune && !speaking && now >= nextBeep){
-    if (S.guide === "bend" && S.beep) cueBend(cents); else cuePark(cents);
-    // Parking-sensor rhythm: farther away = slower beeps.
+  if (inTune && Math.abs(cents) > tol + 3){ inTune = false; inTuneSince = 0; parkNext = 0; }
+  if (S.guide === "bend" && !inTune && !speaking && now >= nextBeep){
+    if (S.beep) cueBend(cents);
     nextBeep = now + Math.max(170, Math.min(900, 140 + Math.abs(cents) * 16));
   }
-  if (+S.auto && now - lastAuto > +S.auto && !inTune){ lastAuto = now; say(centsParts(cents)); }
+  if (!quiet() && +S.auto && now - lastAuto > +S.auto && !inTune){ lastAuto = now; say(centsParts(cents)); }
   draw();
 }
 
@@ -997,7 +1036,8 @@ async function start(silent){
       return false;
     }
     const src = ctx.createMediaStreamSource(stream);
-    analyser = ctx.createAnalyser(); analyser.fftSize = 4096;
+    const t = tuning();   // ventana más corta (más rápida) salvo para graves de bajo, que necesitan una más larga
+    analyser = ctx.createAnalyser(); analyser.fftSize = t.s.length && midiToHz(Math.min(...t.s)) < 65 ? 4096 : 2048;
     buf = new Float32Array(analyser.fftSize);
     src.connect(analyser);
   } else startPracticeString();
@@ -1005,11 +1045,11 @@ async function start(silent){
   running = true; resetTracking(); drawWaiting();
   $("startBtn").textContent = T("btn_detener");
   if (!silent) say(practice ? ["practica"] : ["tocar_cuerda"]);
-  timer = setInterval(analyse, 50);
+  timer = setInterval(analyse, 25); ptimer = setInterval(parkTick, 20);
   return true;
 }
 function stop(silent){
-  running = false; clearInterval(timer);
+  running = false; clearInterval(timer); clearInterval(ptimer); analyser = null;
   if (stream){ stream.getTracks().forEach(t => t.stop()); stream = null; }
   try { wake && wake.release(); } catch(e) {}
   $("startBtn").textContent = practice ? T("btn_practica") : T("btn_empezar");
@@ -1111,7 +1151,16 @@ function collect(p){
 function nextStep(){
   if (pend.tuning && !pend.tuningSaid && INST_WORD.es[pend.inst]) return ask("tuning", QUESTION.tuning());
   if (!pend.mode && !S.modeChosen) return ask("mode", QUESTION.mode());
+  if (pend.a4 === undefined && !S.a4Chosen) return ask("a4", QUESTION.a4());
   const p = pend; pend = null; return apply(p);
+}
+// "La en cuatrocientos cuarenta hercios", armado con los clips de números.
+const a4Parts = v => ["la_en", "w_400", "num_" + (v - 400), "w_hercios"];
+// Cómo se empieza a tocar: en estacionar la voz explica todo (completo la primera vez) y después no habla más.
+function startParts(){
+  if (S.guide !== "park") return ["tocar_cuerda"];
+  const first = !S.parkIntro; S.parkIntro = true; save();
+  return [first ? "intro_park" : "intro_park_corto"];
 }
 
 // Aplica lo elegido y confirma en voz alta solo lo que cambió.
@@ -1119,13 +1168,13 @@ async function apply(p){
   if (p.tuning){ S.tuning = p.tuning; S.string = "auto"; }
   if (p.mode){ S.guide = p.mode; S.modeChosen = true; }
   if (p.a4 !== undefined) setA4(p.a4);
-  S.setup = true; syncUI(); misses = 0;
+  S.a4Chosen = true; S.setup = true; syncUI(); misses = 0;
   const parts = ["perfecto"];
   if (p.tuning) parts.push("tuning_" + S.tuning);
   if (p.mode) parts.push("mode_" + S.guide);
-  if (p.a4 !== undefined) parts.push("la_en", "w_400", "num_" + (p.a4 - 400), "w_hercios");
-  if (!S.tipShown){ S.tipShown = true; save(); parts.push("tip_pausa"); }
-  parts.push("tocar_cuerda");
+  if (p.a4 !== undefined) parts.push(...a4Parts(p.a4));
+  if (S.guide !== "park" && !S.tipShown){ S.tipShown = true; save(); parts.push("tip_pausa"); }
+  parts.push(...startParts());
   flow = "tuning";
   setTap(SR ? "hint_pausar" : "hint_cuanto");
   await say(parts);
@@ -1149,21 +1198,33 @@ function heard(alts, ctxName){
 
   if (ctxName === "tuning"){
     // La respuesta se entiende junto con el instrumento: "cinco" es "bajo de cinco", "drop D" es "guitarra drop D".
+    // También puede venir la referencia ("cuatrocientos cuarenta"), que cuenta como afinación estándar con ese La.
     const q = Interprete.parseAlternatives(alts.map(t => INST_WORD[S.lang][pend.inst] + " " + t), S.lang);
-    if (q.instrument === pend.inst && q.tuningSaid){ collect(q); return nextStep(); }
+    if (p.a4 !== null) pend.a4 = p.a4;
     if (q.instrument && q.instrument !== pend.inst){ collect(q); return nextStep(); } // cambió de instrumento
-    if (p.yes !== null || p.cmd === "go"){ pend.tuningSaid = true; if (q.mode) pend.mode = q.mode; return nextStep(); } // "sí", "no sé": estándar
-    return fail(ctxName);
+    if (q.instrument === pend.inst && q.tuningSaid) collect(q);
+    else if (p.a4 !== null || p.std || p.yes !== null || p.cmd === "go") pend.tuningSaid = true; // "estándar", "sí", "no sé"
+    else return fail(ctxName);
+    if (q.mode) pend.mode = q.mode;
+    return nextStep();
   }
   if (ctxName === "mode"){
     if (p.mode){ collect(p); return pend ? nextStep() : apply(p); }
     if (p.instrument){ collect(p); return nextStep(); }
     return fail(ctxName);
   }
-  if (ctxName === "a4"){ if (p.a4 !== null) return apply({a4: p.a4}); return fail(ctxName); }
+  if (ctxName === "a4"){
+    const v = p.a4 !== null ? p.a4 : (p.std || p.yes === true || p.cmd === "go") ? 440 : null;
+    if (v !== null){
+      if (pend){ pend.a4 = v; const q = pend; pend = null; return apply(q); }
+      return apply({a4: v});
+    }
+    if (p.a4Out) return ask("a4", ["a4_rango"]);
+    return fail(ctxName);
+  }
   if (ctxName === "welcome"){
     if (slot){ pend = null; collect(p); return nextStep(); }
-    if (p.yes === true || p.cmd === "go"){ misses = 0; flow = "tuning"; return say(["perfecto", "tocar_cuerda"]).then(() => { if (flow === "tuning" && !running) start(true); }); }
+    if (p.yes === true || p.cmd === "go"){ misses = 0; flow = "tuning"; return say(["perfecto", ...startParts()]).then(() => { if (flow === "tuning" && !running) start(true); }); }
     if (p.yes === false || p.cmd === "inst"){ pend = null; return ask("open", QUESTION.open()); }
     return fail(ctxName);
   }
@@ -1194,7 +1255,7 @@ function heard(alts, ctxName){
 async function goTune(silent){
   flow = "tuning";
   setTap(SR ? "hint_pausar" : "hint_cuanto");
-  if (!silent) await say(["tocar_cuerda"]);
+  if (!silent) await say(S.guide === "park" ? ["intro_park_corto"] : ["tocar_cuerda"]);
   if (!running){ const ok = await start(true); if (!ok){ flow = "idle"; setTap("hint_empezar", "aria_empezar"); } }
 }
 function pauseToTalk(){
@@ -1214,7 +1275,7 @@ tapEl.addEventListener("click", () => {
   ensureCtx(); if (vozClips) Voz.precargar();
   if (flow === "idle"){
     misses = 0; pend = null;
-    if (S.setup) ask("welcome", ["hola_vuelta", "tuning_" + S.tuning, "mode_" + S.guide, "seguimos_igual"]);
+    if (S.setup) ask("welcome", ["hola_vuelta", "tuning_" + S.tuning, "mode_" + S.guide, ...(S.a4 !== 440 ? a4Parts(S.a4) : []), "seguimos_igual"]);
     else ask("open", ["hola_primera"]);
   }
   else if (flow === "asking" || flow === "waitTap"){ const c = qctx || "open"; ask(c, QUESTION[c]()); }

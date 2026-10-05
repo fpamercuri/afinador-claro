@@ -10,7 +10,7 @@
  "tip_pausa": "Se quiser mudar alguma coisa, toque na tela e fale comigo.",
  "pausa": "Pausa. O que você quer? Por exemplo: continuar, quanto falta, outro instrumento, outro modo, ou terminar.",
  "pregunta_modo": "Como eu te guio? Com o sensor de estacionamento, ou com o bend.",
- "pregunta_a4": "Qual referência para o Lá? Diga um número entre quatrocentos e quinze e quatrocentos e sessenta e seis.",
+ "pregunta_a4": "Qual referência usamos para o Lá? Diga padrão, que é quatrocentos e quarenta, ou o número que quiser, por exemplo quatrocentos e trinta e nove.",
  "la_en": "Lá em",
  "w_400": "quatrocentos e",
  "w_hercios": "hertz.",
@@ -143,5 +143,8 @@
  "pregunta_afin_gtr": "Em qual afinação?",
  "pregunta_afin_bass": "De quantas cordas?",
  "pregunta_afin_uke": "Ukulele comum ou barítono?",
- "no_entendi_afin": "Não entendi. Diga a afinação, ou diga padrão."
+ "no_entendi_afin": "Não entendi. Diga a afinação, ou diga padrão.",
+ "a4_rango": "Não posso usar essa referência. Diga um número entre quatrocentos e quinze e quatrocentos e sessenta e seis.",
+ "intro_park": "Quando você tocar uma corda, vou fazer um bipe com a mesma nota que está soando, e ele muda enquanto você gira a tarraxa. Se a corda estiver baixa, os bipes são lentos e aceleram conforme você sobe. Se estiver alta, são rápidos e desaceleram conforme você desce. Quando chegar na afinação certa, fica uma nota contínua e o celular vibra. A partir de agora não falo mais. Para falar comigo, toque na tela. Toque uma corda.",
+ "intro_park_corto": "Toque uma corda. Não falo mais, guie-se pelos bipes. Para mudar algo, toque na tela."
 }
