@@ -1,0 +1,1233 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Afinador Claro</title></head><body>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<style>
+/* Layout: one column, the reading (note + state) on top, big controls below, settings last. */
+:root{
+  --bg:#f5f6f8; --surface:#ffffff; --fg:#0d1117; --muted:#4a5260; --line:#c9ced8;
+  --accent:#1747c9; --accent-fg:#ffffff; --accent-ink:#1747c9;
+  --flat:#0b5cad; --sharp:#b3261e; --ok:#0f7a3a;
+  --font:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0b0d12; --surface:#151922; --fg:#f4f6fa; --muted:#aeb6c4; --line:#2e3542;
+  --accent:#ffd23f; --accent-fg:#0b0d12; --accent-ink:#ffd23f;
+  --flat:#6cb6ff; --sharp:#ff8a80; --ok:#5ee08c; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0b0d12; --surface:#151922; --fg:#f4f6fa; --muted:#aeb6c4; --line:#2e3542;
+  --accent:#ffd23f; --accent-fg:#0b0d12; --accent-ink:#ffd23f;
+  --flat:#6cb6ff; --sharp:#ff8a80; --ok:#5ee08c; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:1.125rem;line-height:1.5}
+.wrap{max-width:560px;margin:0 auto;padding-inline:16px;padding-block:16px 48px;display:flex;flex-direction:column;gap:20px}
+h1{font-size:1.5rem;margin:0;text-wrap:balance}
+h2{font-size:1.25rem;margin:0 0 8px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.reading{background:var(--surface);border:2px solid var(--line);border-radius:16px;padding:20px 16px;text-align:center;display:flex;flex-direction:column;gap:6px}
+.note{font-size:clamp(4rem,22vw,7rem);font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.string{font-size:1.25rem;color:var(--muted);min-height:1.9rem}
+.state{font-size:2rem;font-weight:700;letter-spacing:.02em;min-height:3rem;border-radius:10px;padding:4px 8px}
+.state.flat{color:var(--flat)} .state.sharp{color:var(--sharp)} .state.ok{color:var(--ok)}
+.cents{font-size:1.25rem;font-variant-numeric:tabular-nums;color:var(--muted)}
+.meter{position:relative;height:28px;border-radius:14px;background:linear-gradient(90deg,var(--flat) 0 45%,var(--ok) 45% 55%,var(--sharp) 55% 100%);opacity:.9;margin-top:8px}
+.meter i{position:absolute;top:-6px;width:8px;height:40px;margin-left:-4px;border-radius:4px;background:var(--fg);left:50%;transition:left .12s linear}
+@media (prefers-reduced-motion:reduce){.meter i{transition:none}}
+.big{display:grid;gap:12px}
+.tap{display:flex;flex-direction:column;justify-content:center;gap:6px;width:100%;min-height:78svh;background:var(--surface);color:var(--fg);border:3px solid var(--fg);border-radius:20px;padding:20px 16px;text-align:center;cursor:pointer;font:inherit}
+.tap > span{display:block}
+.tap .hint{font-size:1.5rem;font-weight:700;margin-top:16px;color:var(--accent-ink)}
+.tap.listening{border-color:var(--ok);box-shadow:0 0 0 6px color-mix(in srgb,var(--ok) 35%,transparent)}
+.tap:focus-visible{outline:4px solid var(--accent);outline-offset:3px}
+details.manual > summary{font-size:1.125rem}
+button,select{font:inherit}
+.btn{min-height:72px;border-radius:14px;border:2px solid var(--fg);background:var(--surface);color:var(--fg);font-size:1.375rem;font-weight:700;padding:12px 16px;cursor:pointer;width:100%}
+.btn.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.btn:focus-visible,select:focus-visible,input:focus-visible+span{outline:4px solid var(--accent);outline-offset:3px}
+.panel{background:var(--surface);border:2px solid var(--line);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:16px}
+label.field{display:flex;flex-direction:column;gap:6px;font-weight:700}
+select{min-height:60px;border-radius:12px;border:2px solid var(--fg);background:var(--bg);color:var(--fg);padding:8px 12px;font-size:1.2rem;width:100%}
+fieldset{border:0;margin:0;padding:0;min-width:0}
+legend{font-weight:700;margin-bottom:6px;padding:0}
+.choices{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
+.choice{position:relative}
+.choice input{position:absolute;opacity:0;inset:0;width:100%;height:100%;margin:0;cursor:pointer}
+.choice span{display:flex;align-items:center;justify-content:center;text-align:center;min-height:60px;border:2px solid var(--line);border-radius:12px;padding:6px 8px;font-weight:700}
+.choice input:checked+span{border-color:var(--accent);background:var(--accent);color:var(--accent-fg)}
+.stepper{display:grid;grid-template-columns:72px 1fr 72px;gap:8px;align-items:center}
+.stepper output{text-align:center;font-size:1.5rem;font-weight:700;font-variant-numeric:tabular-nums}
+.stepper .btn{min-height:60px;font-size:1.75rem;padding:0}
+.checks{display:grid;gap:8px}
+.check{display:flex;align-items:center;gap:12px;min-height:56px;border:2px solid var(--line);border-radius:12px;padding:8px 12px;font-weight:700}
+.check input{width:28px;height:28px;accent-color:var(--accent);flex:none}
+.msg{border-left:6px solid var(--sharp);padding:8px 12px;background:var(--surface)}
+.note-small{color:var(--muted);font-size:1rem;margin:0}
+details summary{cursor:pointer;font-weight:700;min-height:48px;display:flex;align-items:center}
+.practice{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Afinador Claro</h1>
+    <p class="note-small" data-i18n="intro">Se maneja hablando. Tocá en cualquier parte del recuadro y la app te va a preguntar.</p>
+  </header>
+
+  <!-- The whole box is one button: a blind user only has to touch the screen anywhere. Visual reading is for low vision. -->
+  <button class="tap" id="tap" type="button" aria-label="Empezar. La app te va a hablar">
+    <span class="note" id="note" aria-hidden="true">–</span>
+    <span class="string" id="stringLbl" aria-hidden="true">&nbsp;</span>
+    <span class="state" id="state" aria-hidden="true">&nbsp;</span>
+    <span class="cents" id="cents" aria-hidden="true">&nbsp;</span>
+    <span class="meter" aria-hidden="true"><i id="needle"></i></span>
+    <span class="hint" id="hint" aria-hidden="true">Tocá en cualquier parte para empezar</span>
+  </button>
+
+  <div class="sr" role="status" aria-live="polite" id="live"></div>
+  <div class="msg" id="err" role="alert" hidden></div>
+
+  <details class="panel manual">
+  <summary data-i18n="manual">Ajustes manuales (para quien ve la pantalla)</summary>
+  <div class="big">
+    <button class="btn primary" id="startBtn" type="button">Empezar a afinar</button>
+    <div class="row">
+      <button class="btn" id="askBtn" type="button" data-i18n="btn_cuanto">¿Cuánto falta?</button>
+      <button class="btn" id="refBtn" type="button" data-i18n="btn_ref">Escuchar la nota</button>
+    </div>
+    <div class="practice" id="practiceCtl" hidden>
+      <button class="btn" id="downBtn" type="button" data-i18n="btn_aflojar">Aflojar cuerda</button>
+      <button class="btn" id="upBtn" type="button" data-i18n="btn_tensar">Tensar cuerda</button>
+    </div>
+  </div>
+
+  <section class="panel" aria-labelledby="hInst">
+    <h2 id="hInst" data-i18n="h_inst">Instrumento</h2>
+    <label class="field" for="langSel"><span data-i18n="lbl_idioma">Idioma</span>
+      <select id="langSel">
+        <option value="es">Español</option>
+        <option value="en">English</option>
+        <option value="pt">Português</option>
+      </select>
+    </label>
+    <label class="field" for="tuningSel"><span data-i18n="lbl_afin">Afinación</span>
+      <select id="tuningSel"></select>
+    </label>
+    <fieldset id="stringsFs">
+      <legend data-i18n="lbl_cuerda">Cuerda a afinar</legend>
+      <div class="choices" id="strings"></div>
+    </fieldset>
+    <div>
+      <div id="a4Lbl" style="font-weight:700;margin-bottom:6px" data-i18n="lbl_a4">Referencia del La</div>
+      <div class="stepper" role="group" aria-labelledby="a4Lbl">
+        <button class="btn" id="a4Down" type="button" data-i18n-aria="aria_a4_menos">−</button>
+        <output id="a4Out" aria-live="polite">440 Hz</output>
+        <button class="btn" id="a4Up" type="button" data-i18n-aria="aria_a4_mas">+</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="hAvisos">
+    <h2 id="hAvisos" data-i18n="h_avisos">Avisos</h2>
+    <div class="checks">
+      <label class="check"><input type="checkbox" id="optBeep" checked> <span data-i18n="opt_beep">Guía con sonido</span></label>
+      <label class="check"><input type="checkbox" id="optVib" checked> <span id="optVibTxt" data-i18n="opt_vib">Vibración al afinar y en cada pitido (solo Android)</span></label>
+    </div>
+    <label class="field" for="guideSel"><span data-i18n="lbl_guia">Tipo de guía sonora</span>
+      <select id="guideSel">
+        <option value="park" data-i18n="opt_park">Sensor de estacionar: pitidos con tu nota, más rápidos al acercarte</option>
+        <option value="bend" data-i18n="opt_bend">Bend: tu nota se desliza hasta la afinada</option>
+      </select>
+    </label>
+    <label class="field" for="voiceSel"><span data-i18n="lbl_voz">Quién habla</span>
+      <select id="voiceSel">
+        <option value="tts" data-i18n="opt_tts">La voz del afinador</option>
+        <option value="sr" data-i18n="opt_sr">Mi lector de pantalla (VoiceOver o TalkBack)</option>
+        <option value="off" data-i18n="opt_off">Nadie, solo pitidos</option>
+      </select>
+    </label>
+    <label class="field" for="autoSel"><span data-i18n="lbl_auto">Decir los cents solo</span>
+      <select id="autoSel">
+        <option value="0" data-i18n="opt_auto0">No, solo cuando toco ¿Cuánto falta?</option>
+        <option value="2500" data-i18n="opt_auto25">Cada 2,5 segundos</option>
+        <option value="5000" data-i18n="opt_auto5">Cada 5 segundos</option>
+      </select>
+    </label>
+    <label class="field" for="tolSel"><span data-i18n="lbl_tol">Margen para decir afinado</span>
+      <select id="tolSel">
+        <option value="2" data-i18n="opt_tol2">±2 cents (exigente)</option>
+        <option value="3">±3 cents</option>
+        <option value="5" selected>±5 cents</option>
+        <option value="10" data-i18n="opt_tol10">±10 cents (rápido)</option>
+      </select>
+    </label>
+    <label class="field" for="namesSel"><span data-i18n="lbl_nombres">Nombres de las notas</span>
+      <select id="namesSel">
+        <option value="sol" data-i18n="opt_sol">Do, Re, Mi</option>
+        <option value="let">C, D, E</option>
+      </select>
+    </label>
+    <label class="check"><input type="checkbox" id="optPractice"> <span data-i18n="opt_practica">Modo práctica sin micrófono</span></label>
+  </section>
+  </details>
+
+  <details class="panel">
+    <summary data-i18n="como">Cómo se usa</summary>
+    <p class="note-small" data-i18n="como_txt"></p>
+  </details>
+</div>
+
+<script>
+// Interpreta lo que dice la persona (texto que devuelve el reconocimiento de voz) y lo convierte en
+// instrumento, afinación, modo de guía, referencia del La, idioma y órdenes. Entiende frases libres,
+// varias cosas en una sola frase y errores típicos del reconocimiento (yukelele, ben, cuatrocientos...).
+// Habla tres idiomas: es (español), en (inglés) y pt (portugués de Brasil). parse(texto, idioma).
+(function (root) {
+"use strict";
+
+const strip = s => String(s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+
+// Clave fonética: junta letras que suenan igual para absorber errores de reconocimiento.
+function fon(w) {
+  w = strip(w).replace(/[^a-z0-9]/g, "");
+  if (/^\d+$/.test(w)) return w;
+  return w.replace(/qu/g, "k").replace(/c(?=[ei])/g, "s").replace(/c/g, "k").replace(/z/g, "s")
+    .replace(/v/g, "b").replace(/ll/g, "y").replace(/h/g, "").replace(/w/g, "u").replace(/x/g, "ks")
+    .replace(/gu(?=[ei])/g, "g").replace(/(.)\1+/g, "$1");
+}
+
+function lev(a, b) {
+  const m = a.length, n = b.length;
+  if (!m) return n; if (!n) return m;
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const cur = [i];
+    for (let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[n];
+}
+
+// Distancia permitida según el largo: palabras cortas exactas, largas con margen.
+function allowed(a, b) { const l = Math.min(a.length, b.length); return l >= 9 ? 2 : l >= 5 ? 1 : 0; }
+
+function analyse(text, skip) {
+  const words = strip(text).split(/[^a-z0-9]+/).filter(Boolean).filter(w => !(skip && skip.includes(w)));
+  const keys = [];
+  words.forEach((w, i) => {
+    keys.push({ k: fon(w), i });
+    if (i + 1 < words.length) keys.push({ k: fon(w + words[i + 1]), i });
+    if (i + 2 < words.length) keys.push({ k: fon(w + words[i + 1] + words[i + 2]), i });
+  });
+  // Mejor coincidencia de una palabra: 3 si es exacta, 1 si es aproximada, 0 si no está. Devuelve también la posición.
+  function match(word) {
+    const f = fon(word); let best = { score: 0, pos: 1e9 };
+    for (const { k, i } of keys) {
+      let s = 0;
+      if (k === f) s = 3; else if (lev(k, f) <= allowed(k, f)) s = 1;
+      if (s > best.score || (s === best.score && s > 0 && i < best.pos)) best = { score: s, pos: i };
+    }
+    return best;
+  }
+  const has = (...ws) => ws.some(w => match(w).score > 0);
+  const hasExact = (...ws) => ws.some(w => match(w).score === 3);
+  return { words, match, has, hasExact };
+}
+
+// Nombres de idioma: valen dichos en cualquiera de los tres idiomas.
+const IDIOMAS = [
+  ["es", ["espanol", "castellano", "spanish", "espanhol"]],
+  ["en", ["ingles", "english"]],
+  ["pt", ["portugues", "portuguese", "brasileiro"]]
+];
+
+const COMUNES = { charango: ["charango"], cavaco: ["cavaquinho", "cavaco", "cavaquinio"], banjo: ["banjo", "banyo"] };
+
+// Vocabulario de cada idioma. Si dos instrumentos empatan, gana el que se nombró primero.
+const LEX = {
+  es: {
+    instr: {
+      gtr: ["guitarra", "guitar", "guitarrita", "criolla", "clasica", "espanola", "electrica", "acustica", "folk"],
+      bass: ["bajo", "bass", "contrabajo"],
+      uke: ["ukelele", "ukulele", "ukele", "uke"],
+      violin: ["violin"], viola: ["viola"],
+      cello: ["chelo", "violonchelo", "cello", "violoncello"],
+      mando: ["mandolina", "mandolin", "bandolina"],
+      chrom: ["cromatico", "cromatica", "cualquiera", "cualquier", "voz", "piano", "flauta", "trompeta", "saxo", "saxofon",
+        "clarinete", "trombon", "armonica", "acordeon", "bandoneon", "teclado", "oboe", "cantar"]
+    },
+    skip: [],
+    open: ["abierto", "abierta", "open"], noteG: ["sol", "g"], noteD: ["re", "d"], noteE: ["mi", "e"],
+    drop: ["drop"], half: ["medio", "semitono", "bemol"],
+    whole: [["tono"], ["abajo", "bajo", "bajar", "bajado", "menos"]],
+    std: ["estandar", "normal", "comun", "standard"],
+    five: ["cinco"], four: ["cuatro"], bari: ["baritono", "baritona"],
+    bend: ["bend", "ben", "bent", "vent", "desliz", "deslizar", "deslice", "glissando", "curva"],
+    park: ["estacionar", "estacionamiento", "estaciona", "estacionando", "sensor", "pitido", "pitidos", "reversa", "parking", "parquear"],
+    parkPair: [["marcha"], ["atras"]],
+    hundred: "cuatrocientos", hundredNeedsFour: false,
+    num: { uno: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, nueve: 9, diez: 10, once: 11, doce: 12, trece: 13,
+      catorce: 14, quince: 15, dieciseis: 16, diecisiete: 17, dieciocho: 18, diecinueve: 19, veinte: 20, veintiuno: 21, veintidos: 22,
+      veintitres: 23, veinticuatro: 24, veinticinco: 25, veintiseis: 26, veintisiete: 27, veintiocho: 28, veintinueve: 29,
+      treinta: 30, cuarenta: 40, cincuenta: 50, sesenta: 60 },
+    end: ["termin", "terminar", "termine", "salir", "chau", "chao", "basta", "apagar", "apaga", "fin", "finalizar"],
+    help: ["ayuda", "opciones"], repeat: ["repetir", "repeti", "repite"],
+    cents: ["cuanto", "falta", "faltan", "desviado", "centavos", "cents"],
+    refVerbs: ["escuchar", "escucho", "dame", "reproducir"], refWord: ["referencia"],
+    instWord: ["instrumento", "afinacion"], modeWord: ["modo", "guia"],
+    change: ["cambiar", "otro", "otra", "distinto", "diferente", "cambio", "cambia"],
+    go: ["seguir", "segui", "seguimos", "sigamos", "continuar", "continua", "volver", "adelante", "listo", "dale"],
+    yes: ["si", "dale", "ok", "okay", "bueno", "igual", "seguimos", "sigamos", "perfecto", "claro", "correcto", "exacto", "mismo", "afirmativo"],
+    neg: ["no"],
+    noWords: ["no", "cambiar", "cambio", "cambia", "cambiamos", "otro", "otra", "distinto", "diferente"]
+  },
+  en: {
+    instr: {
+      gtr: ["guitar", "guitars", "acoustic", "electric", "classical", "nylon"],
+      bass: ["bass", "basses", "upright"],
+      uke: ["ukulele", "ukelele", "uke"],
+      violin: ["violin", "fiddle"], viola: ["viola"],
+      cello: ["cello", "violoncello", "chelo"],
+      mando: ["mandolin"],
+      chrom: ["chromatic", "any", "anything", "voice", "sing", "singing", "piano", "flute", "trumpet", "sax", "saxophone",
+        "clarinet", "trombone", "harmonica", "accordion", "keyboard", "oboe"]
+    },
+    skip: [],
+    open: ["open"], noteG: ["g", "gee"], noteD: ["d", "dee"], noteE: ["e"],
+    drop: ["drop", "dropped"], half: ["half", "semitone", "flat"],
+    whole: [["whole", "full", "entire"], ["step", "tone", "down"]],
+    std: ["standard", "normal", "regular"],
+    five: ["five"], four: ["four"], bari: ["baritone"],
+    bend: ["bend", "bent", "glide", "gliding", "slide", "sliding"],
+    park: ["parking", "park", "sensor", "beep", "beeps", "beeping", "reverse", "reversing"],
+    parkPair: [["backup"], ["beeper"]],
+    hundred: "hundred", hundredNeedsFour: true,
+    num: { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13,
+      fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60 },
+    end: ["stop", "quit", "exit", "finish", "finished", "done", "bye", "goodbye"],
+    help: ["help", "options"], repeat: ["repeat", "again", "pardon"],
+    cents: ["far", "much", "cents", "close", "distance"],
+    refVerbs: ["hear", "listen", "play", "give"], refWord: ["reference"],
+    instWord: ["instrument", "tuning"], modeWord: ["mode", "guide"],
+    change: ["change", "other", "another", "different", "switch", "new"],
+    go: ["continue", "resume", "go", "keep", "ready", "carry", "back"],
+    yes: ["yes", "yeah", "yep", "yup", "sure", "ok", "okay", "same", "fine", "right", "correct", "exactly", "please"],
+    neg: ["no", "not", "nope"],
+    noWords: ["no", "nope", "change", "other", "another", "different", "switch"]
+  },
+  pt: {
+    instr: {
+      gtr: ["violao", "guitarra", "classico", "eletrica", "eletrico", "acustico", "folk", "nylon"],
+      bass: ["baixo", "contrabaixo"],
+      uke: ["ukulele", "ukelele", "uke"],
+      violin: ["violino", "rabeca"], viola: ["viola"],
+      cello: ["violoncelo", "cello", "celo"],
+      mando: ["bandolim"],
+      chrom: ["cromatico", "cromatica", "qualquer", "voz", "cantar", "piano", "flauta", "trompete", "sax", "saxofone",
+        "clarinete", "trombone", "gaita", "acordeao", "sanfona", "teclado", "oboe"]
+    },
+    // "abaixo" (para abajo) se parece demasiado a "baixo" (el instrumento): no cuenta para elegir instrumento.
+    skip: ["abaixo"],
+    open: ["aberto", "aberta", "open"], noteG: ["sol", "g"], noteD: ["re", "d"], noteE: ["mi", "e"],
+    drop: ["drop"], half: ["meio", "semitom", "bemol"],
+    whole: [["tom"], ["abaixo", "baixo", "baixar", "baixado", "menos"]],
+    std: ["padrao", "normal", "standard", "comum"],
+    five: ["cinco"], four: ["quatro"], bari: ["baritono"],
+    bend: ["bend", "ben", "bent", "deslizar", "deslize", "deslizando", "glissando", "curva"],
+    park: ["estacionar", "estacionamento", "estacionando", "sensor", "bipe", "bipes", "apito", "apitos", "parking"],
+    parkPair: [["marcha"], ["re"]],
+    hundred: "quatrocentos", hundredNeedsFour: false,
+    num: { um: 1, uma: 1, dois: 2, duas: 2, tres: 3, quatro: 4, cinco: 5, seis: 6, sete: 7, oito: 8, nove: 9, dez: 10, onze: 11, doze: 12,
+      treze: 13, catorze: 14, quatorze: 14, quinze: 15, dezesseis: 16, dezessete: 17, dezoito: 18, dezenove: 19, vinte: 20,
+      trinta: 30, quarenta: 40, cinquenta: 50, sessenta: 60 },
+    end: ["terminar", "termina", "sair", "tchau", "chega", "desligar", "desliga", "fim", "finalizar", "parar"],
+    help: ["ajuda", "opcoes"], repeat: ["repetir", "repete", "repita"],
+    cents: ["quanto", "falta", "faltam", "cents", "centavos"],
+    refVerbs: ["ouvir", "escutar", "reproduzir", "ouca", "escuta"], refWord: ["referencia"],
+    instWord: ["instrumento", "afinacao"], modeWord: ["modo", "guia"],
+    change: ["mudar", "muda", "trocar", "troca", "outro", "outra", "diferente", "novo"],
+    go: ["continuar", "continua", "seguir", "segue", "vamos", "voltar", "pronto", "bora"],
+    yes: ["sim", "isso", "claro", "beleza", "mesmo", "mesma", "ok", "okay", "certo", "exato", "pode", "perfeito", "igual"],
+    neg: ["nao"],
+    noWords: ["nao", "mudar", "muda", "trocar", "troca", "outro", "outra", "diferente"]
+  }
+};
+for (const l of Object.values(LEX)) Object.assign(l.instr, COMUNES);
+
+// Referencia del La: "432", "cuatrocientos treinta y dos", "four thirty two". Devuelve 415-466 o null.
+function parseA4(a, text, L) {
+  const d = (strip(text).match(/\b(4\d\d)\b/) || [])[1];
+  if (d && +d >= 415 && +d <= 466) return +d;
+  const ws = a.words, isNum = (w, n) => fon(w) === fon(n);
+  let i = ws.findIndex(w => allowedWord(w, L.hundred));
+  if (i >= 0 && L.hundredNeedsFour && !(i > 0 && isNum(ws[i - 1], "four"))) i = -1;
+  // En inglés también se dice "four forty" o "four thirty two", sin "hundred".
+  if (i < 0 && L.hundredNeedsFour) {
+    const tens = ["fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty", "thirty", "forty", "fifty", "sixty"];
+    i = ws.findIndex((w, j) => isNum(w, "four") && ws[j + 1] && tens.some(n => isNum(ws[j + 1], n)));
+  }
+  if (i < 0) return null;
+  let v = 400;
+  for (const w of ws.slice(i + 1)) {
+    const hit = Object.keys(L.num).find(n => fon(n) === fon(w));
+    if (hit) v += L.num[hit];
+  }
+  return v >= 415 && v <= 466 ? v : null;
+}
+function allowedWord(w, target) { const a = fon(w), b = fon(target); return a === b || lev(a, b) <= allowed(a, b); }
+
+function parse(text, lang) {
+  const L = LEX[lang] || LEX.es;
+  const a = analyse(text), ai = L.skip.length ? analyse(text, L.skip) : a;
+  const out = { instrument: null, tuning: null, tuningSaid: false, mode: null, a4: null, cmd: null, yes: null, lang: null, text };
+
+  // Idioma: "en inglés", "english", "português"... Solo palabras exactas, para no confundir.
+  for (const [id, ws] of IDIOMAS) if (ws.some(w => a.match(w).score === 3)) { out.lang = id; break; }
+
+  // Instrumento: gana el de mejor coincidencia; si empatan, el que se nombró primero.
+  let best = null;
+  for (const [id, ws] of Object.entries(L.instr)) {
+    for (const w of ws) {
+      const m = ai.match(w);
+      if (m.score && (!best || m.score > best.score || (m.score === best.score && m.pos < best.pos))) best = { id, score: m.score, pos: m.pos };
+    }
+  }
+  if (best) out.instrument = best.id;
+
+  // Afinaciones de guitarra (también valen solas: "drop D" implica guitarra).
+  let gt = null;
+  if (a.has("dadgad", "dad")) gt = "gtrDADGAD";
+  else if (a.has(...L.open)) {
+    gt = a.has(...L.noteG) ? "gtrOG" : a.has(...L.noteD) ? "gtrOD" : a.has(...L.noteE) ? "gtrOE" : null;
+  }
+  if (!gt && a.has(...L.drop)) gt = "gtrDD";
+  if (!gt && a.has(...L.half)) gt = "gtrHS";
+  if (!gt && a.has(...L.whole[0]) && a.has(...L.whole[1])) gt = "gtrWS";
+  if (!gt && a.has(...L.std)) gt = out.instrument && out.instrument !== "gtr" ? null : "gtr";
+
+  // Cantidad de cuerdas / tamaño.
+  const five = a.has(...L.five, "5") || /\b5\b/.test(strip(text));
+  const four = a.has(...L.four) || /\b4\b/.test(strip(text));
+  const bari = a.has(...L.bari);
+  const std = a.has(...L.std);
+
+  if (!out.instrument && gt) out.instrument = "gtr";
+  if (!out.instrument && bari) out.instrument = "uke";
+  switch (out.instrument) {
+    case "gtr": out.tuning = gt || "gtr"; break;
+    case "bass": out.tuning = five && !four ? "bass5" : "bass4"; break;
+    case "uke": out.tuning = bari ? "ukeB" : "uke"; break;
+    case null: break;
+    default: out.tuning = out.instrument;
+  }
+  // Si solo nombró el instrumento, la afinación queda "sin decir" y la app la pregunta aparte.
+  out.tuningSaid = !!(gt || std || (out.instrument === "bass" && (five || four)) || (out.instrument === "uke" && bari));
+
+  // Modo de guía.
+  if (a.has(...L.bend)) out.mode = "bend";
+  else if (a.has(...L.park)) out.mode = "park";
+  if (a.hasExact(...L.parkPair[0]) && a.has(...L.parkPair[1])) out.mode = "park";
+
+  out.a4 = parseA4(a, text, L);
+
+  // Órdenes.
+  const w = (...x) => a.has(...x);
+  if (w(...L.end)) out.cmd = "end";
+  else if (w(...L.help)) out.cmd = "help";
+  else if (w(...L.repeat)) out.cmd = "repeat";
+  else if (w(...L.cents)) out.cmd = "cents";
+  else if (w(...L.refVerbs, ...L.refWord) && out.a4 === null && !out.instrument) out.cmd = w(...L.refWord) && !w(...L.refVerbs) ? "a4" : "ref";
+  else if (w(...L.instWord) && w(...L.change)) out.cmd = "inst";
+  else if (w(...L.modeWord) && w(...L.change) && !out.mode) out.cmd = "mode";
+  else if (w(...L.go)) out.cmd = "go";
+  if (!out.cmd && w(...L.change) && !out.instrument && !out.mode && out.a4 === null && !out.lang) out.cmd = "inst";
+
+  if (w(...L.yes) && !w(...L.neg)) out.yes = true;
+  else if (w(...L.noWords)) out.yes = false;
+
+  out.any = !!(out.instrument || out.mode || out.a4 !== null || out.cmd || out.yes !== null || out.lang);
+  out.slots = (out.instrument ? 1 : 0) + (out.mode ? 1 : 0) + (out.a4 !== null ? 1 : 0) + (out.lang ? 1 : 0);
+  return out;
+}
+
+// El reconocimiento devuelve varias hipótesis: se elige la que más entiende.
+function parseAlternatives(alts, lang) {
+  let best = null, bs = -1;
+  for (const t of alts) {
+    const p = parse(t, lang);
+    const s = p.slots * 2 + (p.cmd ? 1 : 0) + (p.yes !== null ? 1 : 0);
+    if (s > bs) { best = p; bs = s; }
+  }
+  return best || parse("", lang);
+}
+
+const api = { parse, parseAlternatives, fon, lev };
+if (typeof module !== "undefined" && module.exports) module.exports = api;
+root.Interprete = api;
+})(typeof window !== "undefined" ? window : globalThis);
+
+// Motor de voz del afinador.
+// Con audios grabados (carpeta voz/, generada con ElevenLabs): arma cada mensaje encadenando clips.
+// Sin audios: usa la voz del teléfono como respaldo. Los mensajes son listas de claves de frases.json.
+// Tres idiomas (es, en, pt), cada uno con sus textos y su carpeta de audios.
+(function (root) {
+"use strict";
+
+const Voz = {
+  frases: {}, manifest: null, buffers: new Map(), ctx: null, fuente: null, onBusy: () => {},
+  modo: () => "app",        // "app" | "sr" | "off", lo decide la pantalla
+  vivo: null,                // elemento aria-live para el modo lector de pantalla
+  busy: false, token: 0, tts: null,
+
+  async init({ lang, getCtx, onBusy, modo, vivo }) {
+    this.getCtx = getCtx; this.onBusy = onBusy || this.onBusy; if (modo) this.modo = modo; this.vivo = vivo;
+    if ("speechSynthesis" in root) speechSynthesis.addEventListener?.("voiceschanged", () => this.eligeVozTTS());
+    return this.idioma(lang || "es");
+  },
+
+  // Cambia de idioma: carga los textos y los audios de ese idioma (es: frases.json y voz/; en y pt: frases.en.json y voz-en/...).
+  async idioma(lang) {
+    this.parar(); this.lang = lang; this.buffers = new Map();
+    const frasesUrl = lang === "es" ? "frases.json" : `frases.${lang}.json`;
+    const manifestUrl = lang === "es" ? "voz/manifest.json" : `voz-${lang}/manifest.json`;
+    try { this.frases = await (await fetch(frasesUrl)).json(); } catch (e) { this.frases = {}; }
+    try {
+      const r = await fetch(manifestUrl);
+      this.manifest = r.ok ? await r.json() : null; this.base = manifestUrl.replace(/[^/]*$/, "");
+    } catch (e) { this.manifest = null; }
+    this.eligeVozTTS();
+    return this.conClips();
+  },
+  conClips() { return !!(this.manifest && Object.keys(this.manifest).length); },
+
+  // Respaldo: la mejor voz del teléfono en el idioma elegido (las de red o "mejoradas" suenan mucho mejor).
+  eligeVozTTS() {
+    if (!("speechSynthesis" in root)) return;
+    const l = this.lang || "es", base = new RegExp("^" + l, "i");
+    const local = { es: /^es[-_](AR|419|US|MX)/i, en: /^en[-_](US|GB)/i, pt: /^pt[-_]BR/i }[l];
+    const pref = v => (local.test(v.lang) ? 3 : base.test(v.lang) ? 1 : -9)
+      + (/natural|neural|premium|enhanced|mejorada|online|google/i.test(v.name) ? 4 : 0) + (v.localService ? 0 : 1);
+    this.tts = speechSynthesis.getVoices().filter(v => base.test(v.lang)).sort((a, b) => pref(b) - pref(a))[0] || null;
+  },
+
+  texto(partes) { return partes.map(p => this.frases[p] ?? p).join(" "); },
+
+  async cargar(clave) {
+    if (this.buffers.has(clave)) return this.buffers.get(clave);
+    const archivo = this.manifest && this.manifest[clave];
+    if (!archivo) return null;
+    const bytes = await (await fetch(this.base + archivo)).arrayBuffer();
+    const ctx = this.getCtx();
+    const buf = await new Promise((ok, mal) => { const p = ctx.decodeAudioData(bytes, ok, mal); p && p.then && p.then(ok, mal); });
+    this.buffers.set(clave, buf); return buf;
+  },
+  // Descarga todos los clips en segundo plano para que después no haya demora.
+  precargar() { if (this.conClips()) Object.keys(this.manifest).forEach(k => this.cargar(k).catch(() => {})); },
+
+  parar() {
+    this.token++;
+    try { this.fuente && this.fuente.forEach(s => { try { s.stop(); } catch (e) {} }); } catch (e) {}
+    this.fuente = null;
+    if ("speechSynthesis" in root) try { speechSynthesis.cancel(); } catch (e) {}
+    this.setBusy(false);
+  },
+  setBusy(b) { if (this.busy !== b) { this.busy = b; this.onBusy(b); } },
+
+  // Dice un mensaje (lista de claves) y devuelve una promesa que se cumple al terminar.
+  async decir(partes) {
+    const modo = this.modo();
+    if (modo === "off") return;
+    if (!Array.isArray(partes)) partes = [partes];
+    if (modo === "sr" && this.vivo) {
+      const t = this.texto(partes); this.vivo.textContent = ""; await new Promise(r => setTimeout(r, 60)); this.vivo.textContent = t; return;
+    }
+    this.parar(); const mi = ++this.token;
+    if (this.conClips()) {
+      try {
+        const bufs = await Promise.all(partes.map(p => this.cargar(p)));
+        if (mi !== this.token) return;
+        if (bufs.every(Boolean)) return await this.clips(bufs, mi);
+      } catch (e) { /* si falla un clip, se dice todo con la voz del teléfono */ }
+    }
+    if (mi !== this.token) return;
+    return this.hablar(this.texto(partes), mi);
+  },
+
+  clips(bufs, mi) {
+    const ctx = this.getCtx(); this.setBusy(true);
+    let t = ctx.currentTime + 0.03; const fuentes = [];
+    bufs.forEach(b => {
+      const s = ctx.createBufferSource(); s.buffer = b; s.connect(ctx.destination); s.start(t);
+      fuentes.push(s); t += b.duration + 0.06;
+    });
+    this.fuente = fuentes;
+    return new Promise(ok => {
+      const ultima = fuentes[fuentes.length - 1];
+      ultima.onended = () => { if (mi === this.token) this.setBusy(false); ok(); };
+    });
+  },
+
+  hablar(texto, mi) {
+    if (!("speechSynthesis" in root)) { if (this.vivo) this.vivo.textContent = texto; return Promise.resolve(); }
+    this.setBusy(true);
+    return new Promise(ok => {
+      const u = new SpeechSynthesisUtterance(texto);
+      u.lang = this.tts ? this.tts.lang : ({ es: "es-AR", en: "en-US", pt: "pt-BR" }[this.lang] || "es-AR"); if (this.tts) u.voice = this.tts; u.rate = 1.0;
+      let hecho = false;
+      const fin = () => { if (hecho) return; hecho = true; if (mi === this.token) this.setBusy(false); ok(); };
+      u.onend = u.onerror = fin;
+      setTimeout(fin, 2500 + texto.length * 90); // algunos teléfonos nunca avisan que terminaron
+      speechSynthesis.speak(u);
+    });
+  }
+};
+
+root.Voz = Voz;
+})(typeof window !== "undefined" ? window : globalThis);
+
+</script>
+<script>
+(() => {
+"use strict";
+const $ = id => document.getElementById(id);
+
+// ---------- Data ----------
+// Strings are listed from the lowest-pitched (highest number) to string 1, as MIDI numbers.
+const TUNINGS = [
+  {id:"gtr",   s:[40,45,50,55,59,64], name:{es:"Guitarra · estándar (Mi La Re Sol Si Mi)", en:"Guitar · standard (E A D G B E)", pt:"Violão · padrão (Mi Lá Ré Sol Si Mi)"}},
+  {id:"gtrDD", s:[38,45,50,55,59,64], name:{es:"Guitarra · Drop D (Re La Re Sol Si Mi)", en:"Guitar · Drop D (D A D G B E)", pt:"Violão · Drop D (Ré Lá Ré Sol Si Mi)"}},
+  {id:"gtrHS", s:[39,44,49,54,58,63], name:{es:"Guitarra · medio tono abajo", en:"Guitar · half step down", pt:"Violão · meio tom abaixo"}},
+  {id:"gtrWS", s:[38,43,48,53,57,62], name:{es:"Guitarra · un tono abajo", en:"Guitar · whole step down", pt:"Violão · um tom abaixo"}},
+  {id:"gtrDADGAD", s:[38,45,50,55,57,62], name:{es:"Guitarra · DADGAD (Re La Re Sol La Re)", en:"Guitar · DADGAD", pt:"Violão · DADGAD (Ré Lá Ré Sol Lá Ré)"}},
+  {id:"gtrOG", s:[38,43,50,55,59,62], name:{es:"Guitarra · Sol abierto (Re Sol Re Sol Si Re)", en:"Guitar · open G (D G D G B D)", pt:"Violão · Sol aberto (Ré Sol Ré Sol Si Ré)"}},
+  {id:"gtrOD", s:[38,45,50,54,57,62], name:{es:"Guitarra · Re abierto (Re La Re Fa♯ La Re)", en:"Guitar · open D (D A D F♯ A D)", pt:"Violão · Ré aberto (Ré Lá Ré Fá♯ Lá Ré)"}},
+  {id:"gtrOE", s:[40,47,52,56,59,64], name:{es:"Guitarra · Mi abierto (Mi Si Mi Sol♯ Si Mi)", en:"Guitar · open E (E B E G♯ B E)", pt:"Violão · Mi aberto (Mi Si Mi Sol♯ Si Mi)"}},
+  {id:"bass4", s:[28,33,38,43], name:{es:"Bajo 4 cuerdas (Mi La Re Sol)", en:"Bass, 4 strings (E A D G)", pt:"Baixo 4 cordas (Mi Lá Ré Sol)"}},
+  {id:"bass5", s:[23,28,33,38,43], name:{es:"Bajo 5 cuerdas (Si Mi La Re Sol)", en:"Bass, 5 strings (B E A D G)", pt:"Baixo 5 cordas (Si Mi Lá Ré Sol)"}},
+  {id:"uke",   s:[67,60,64,69], name:{es:"Ukelele (Sol Do Mi La)", en:"Ukulele (G C E A)", pt:"Ukulele (Sol Dó Mi Lá)"}},
+  {id:"ukeB",  s:[50,55,59,64], name:{es:"Ukelele barítono (Re Sol Si Mi)", en:"Baritone ukulele (D G B E)", pt:"Ukulele barítono (Ré Sol Si Mi)"}},
+  {id:"cavaco", s:[62,67,71,74], name:{es:"Cavaquinho (Re Sol Si Re)", en:"Cavaquinho (D G B D)", pt:"Cavaquinho (Ré Sol Si Ré)"}},
+  {id:"charango", s:[67,72,76,69,76], name:{es:"Charango (Sol Do Mi La Mi)", en:"Charango (G C E A E)", pt:"Charango (Sol Dó Mi Lá Mi)"}},
+  {id:"violin", s:[55,62,69,76], name:{es:"Violín (Sol Re La Mi)", en:"Violin (G D A E)", pt:"Violino (Sol Ré Lá Mi)"}},
+  {id:"viola", s:[48,55,62,69], name:{es:"Viola (Do Sol Re La)", en:"Viola (C G D A)", pt:"Viola (Dó Sol Ré Lá)"}},
+  {id:"cello", s:[36,43,50,57], name:{es:"Violonchelo (Do Sol Re La)", en:"Cello (C G D A)", pt:"Violoncelo (Dó Sol Ré Lá)"}},
+  {id:"mando", s:[55,62,69,76], name:{es:"Mandolina (Sol Re La Mi)", en:"Mandolin (G D A E)", pt:"Bandolim (Sol Ré Lá Mi)"}},
+  {id:"banjo", s:[67,50,55,59,62], name:{es:"Banjo 5 cuerdas · Sol abierto", en:"5-string banjo · open G", pt:"Banjo 5 cordas · Sol aberto"}},
+  {id:"chrom", s:[], name:{es:"Cromático (cualquier instrumento o voz)", en:"Chromatic (any instrument or voice)", pt:"Cromático (qualquer instrumento ou voz)"}}
+];
+const SOL_PT = ["Dó","Dó sustenido","Ré","Ré sustenido","Mi","Fá","Fá sustenido","Sol","Sol sustenido","Lá","Lá sustenido","Si"];
+const SOL_PT_SHORT = ["Dó","Dó♯","Ré","Ré♯","Mi","Fá","Fá♯","Sol","Sol♯","Lá","Lá♯","Si"];
+const SOL = ["Do","Do sostenido","Re","Re sostenido","Mi","Fa","Fa sostenido","Sol","Sol sostenido","La","La sostenido","Si"];
+const SOL_SHORT = ["Do","Do♯","Re","Re♯","Mi","Fa","Fa♯","Sol","Sol♯","La","La♯","Si"];
+const LET = ["C","C♯","D","D♯","E","F","F♯","G","G♯","A","A♯","B"];
+const LET_SHORT = ["C","C♯","D","D♯","E","F","F♯","G","G♯","A","A♯","B"];
+
+// ---------- Settings ----------
+const langGuess = () => { const l = (navigator.language || "es").slice(0, 2).toLowerCase(); return l === "pt" ? "pt" : l === "es" ? "es" : "en"; };
+const S = {guide:"park", tuning:"gtr", string:"auto", a4:440, beep:true, vib:true, voice:"tts", auto:"0", tol:"5", names:"", lang:""};
+try { Object.assign(S, JSON.parse(localStorage.getItem("afinador-claro") || "{}")); } catch(e) {}
+if (S.guide !== "park" && S.guide !== "bend") S.guide = "park";
+if (!["es", "en", "pt"].includes(S.lang)) S.lang = langGuess();
+const save = () => { try { localStorage.setItem("afinador-claro", JSON.stringify(S)); } catch(e) {} };
+const tuning = () => TUNINGS.find(t => t.id === S.tuning) || TUNINGS[0];
+
+const noteName = (m, short) => {
+  const i = ((m % 12) + 12) % 12;
+  const names = S.names || (S.lang === "en" ? "let" : "sol");
+  if (names === "let") return (short ? LET_SHORT : LET)[i];
+  return (S.lang === "pt" ? (short ? SOL_PT_SHORT : SOL_PT) : (short ? SOL_SHORT : SOL))[i];
+};
+const midiToHz = m => S.a4 * Math.pow(2, (m - 69) / 12);
+const hzToMidi = f => 69 + 12 * Math.log2(f / S.a4);
+const stringNumber = idx => tuning().s.length - idx;
+
+// ---------- Textos de pantalla en tres idiomas ----------
+const I18N = {
+  es: {
+    intro:"Se maneja hablando. Tocá en cualquier parte del recuadro y la app te va a preguntar.",
+    manual:"Ajustes manuales (para quien ve la pantalla)", btn_empezar:"Empezar a afinar", btn_detener:"Detener", btn_practica:"Empezar práctica",
+    btn_cuanto:"¿Cuánto falta?", btn_ref:"Escuchar la nota", btn_aflojar:"Aflojar cuerda", btn_tensar:"Tensar cuerda",
+    h_inst:"Instrumento", lbl_idioma:"Idioma", lbl_afin:"Afinación", lbl_cuerda:"Cuerda a afinar", lbl_a4:"Referencia del La",
+    aria_a4_menos:"Bajar referencia un hercio", aria_a4_mas:"Subir referencia un hercio",
+    h_avisos:"Avisos", opt_beep:"Guía con sonido", opt_vib:"Vibración al afinar y en cada pitido (solo Android)",
+    opt_vib_no:"Vibración: este teléfono o navegador no la permite",
+    lbl_guia:"Tipo de guía sonora", opt_park:"Sensor de estacionar: pitidos con tu nota, más rápidos al acercarte", opt_bend:"Bend: tu nota se desliza hasta la afinada",
+    lbl_voz:"Quién habla", opt_tts:"La voz del afinador", opt_sr:"Mi lector de pantalla (VoiceOver o TalkBack)", opt_off:"Nadie, solo pitidos",
+    lbl_auto:"Decir los cents solo", opt_auto0:"No, solo cuando toco ¿Cuánto falta?", opt_auto25:"Cada 2,5 segundos", opt_auto5:"Cada 5 segundos",
+    lbl_tol:"Margen para decir afinado", opt_tol2:"±2 cents (exigente)", opt_tol10:"±10 cents (rápido)",
+    lbl_nombres:"Nombres de las notas", opt_sol:"Do, Re, Mi", opt_practica:"Modo práctica sin micrófono",
+    como:"Cómo se usa",
+    como_txt:"Tocá en cualquier parte del recuadro grande. La app te pregunta de a una cosa: qué vas a afinar, la afinación y cómo querés que te guíe. Respondés hablando después del tic, y si decís varias cosas juntas se saltea lo que ya contestaste. La próxima vez recuerda lo que elegiste y solo pregunta si seguís igual. Mientras afinás, tocá la pantalla para pausar y pedir lo que quieras: seguir, cuánto falta, escuchar la nota, otro instrumento, otro modo o terminar. Para cambiar de idioma decí english o português. Hay dos modos de guía. Sensor de estacionar: pitidos con la misma nota que estás tocando, más rápidos al acercarte. Bend: cada pitido arranca en tu nota y se desliza hasta la afinada. Al llegar, la nota queda fija, el teléfono vibra y dice afinado. Con auriculares funciona mejor.",
+    hint_hablar:"Hablá después del tic. Tocá para repetir", aria_repetir:"Tocá dos veces para repetir la pregunta",
+    hint_tocar_hablar:"Tocá la pantalla para hablar", hint_pausar:"Tocá la pantalla para pausar y hablar",
+    hint_cuanto:"Tocá la pantalla para saber cuánto falta", hint_empezar:"Tocá en cualquier parte para empezar", aria_empezar:"Empezar. La app te va a hablar",
+    d_toca:"Tocá una cuerda", d_escuchando:"Escuchando", d_lejos:"Lejos de la cuerda elegida", d_muy_lejos:"Muy lejos",
+    d_cuerda:"Cuerda {n}", d_crom:"Cromático", d_afinado:"AFINADO", d_grave:"GRAVE · tensá", d_agudo:"AGUDO · aflojá",
+    auto:"Automático", cuerda_corta:"{n}ª", sostenido:"sostenido",
+    err_mic:"No pude usar el micrófono. Revisá que el navegador tenga permiso de micrófono para esta página. También podés activar el modo práctica sin micrófono, más abajo."
+  },
+  en: {
+    intro:"Works by voice. Tap anywhere in the box and the app will ask you.",
+    manual:"Manual settings (for sighted users)", btn_empezar:"Start tuning", btn_detener:"Stop", btn_practica:"Start practice",
+    btn_cuanto:"How far?", btn_ref:"Hear the note", btn_aflojar:"Loosen string", btn_tensar:"Tighten string",
+    h_inst:"Instrument", lbl_idioma:"Language", lbl_afin:"Tuning", lbl_cuerda:"String to tune", lbl_a4:"Reference pitch (A)",
+    aria_a4_menos:"Lower reference by one hertz", aria_a4_mas:"Raise reference by one hertz",
+    h_avisos:"Cues", opt_beep:"Sound guide", opt_vib:"Vibrate when in tune and on each beep (Android only)",
+    opt_vib_no:"Vibration: not supported on this phone or browser",
+    lbl_guia:"Sound guide type", opt_park:"Parking sensor: beeps at your note, faster as you get closer", opt_bend:"Bend: your note glides to the tuned one",
+    lbl_voz:"Who speaks", opt_tts:"The tuner's voice", opt_sr:"My screen reader (VoiceOver or TalkBack)", opt_off:"Nobody, beeps only",
+    lbl_auto:"Say the cents automatically", opt_auto0:"No, only when I tap How far?", opt_auto25:"Every 2.5 seconds", opt_auto5:"Every 5 seconds",
+    lbl_tol:"Margin to call it in tune", opt_tol2:"±2 cents (strict)", opt_tol10:"±10 cents (quick)",
+    lbl_nombres:"Note names", opt_sol:"Do, Re, Mi", opt_practica:"Practice mode without microphone",
+    como:"How to use it",
+    como_txt:"Tap anywhere in the big box. The app asks you one thing at a time: what you are tuning, the tuning, and how you want to be guided. Answer by speaking after the tick; if you say several things at once, it skips what you already answered. Next time it remembers your choices and just asks if you want the same. While tuning, tap the screen to pause and ask for anything: continue, how far, hear the note, another instrument, another mode, or stop. To change language say español or português. There are two guide modes. Parking sensor: beeps at the same note you are playing, faster as you get closer. Bend: each beep starts at your note and glides to the tuned one. When you get there, the note holds, the phone vibrates and says in tune. Works best with headphones.",
+    hint_hablar:"Speak after the tick. Tap to repeat", aria_repetir:"Double tap to repeat the question",
+    hint_tocar_hablar:"Tap the screen to talk", hint_pausar:"Tap the screen to pause and talk",
+    hint_cuanto:"Tap the screen to hear how far you are", hint_empezar:"Tap anywhere to start", aria_empezar:"Start. The app will talk to you",
+    d_toca:"Play a string", d_escuchando:"Listening", d_lejos:"Far from the chosen string", d_muy_lejos:"Very far",
+    d_cuerda:"String {n}", d_crom:"Chromatic", d_afinado:"IN TUNE", d_grave:"FLAT · tighten", d_agudo:"SHARP · loosen",
+    auto:"Auto", cuerda_corta:"#{n}", sostenido:"sharp",
+    err_mic:"I couldn't use the microphone. Check that the browser has microphone permission for this page. You can also turn on practice mode without microphone, below."
+  },
+  pt: {
+    intro:"Funciona falando. Toque em qualquer parte do quadro e o app vai perguntar.",
+    manual:"Ajustes manuais (para quem vê a tela)", btn_empezar:"Começar a afinar", btn_detener:"Parar", btn_practica:"Começar prática",
+    btn_cuanto:"Quanto falta?", btn_ref:"Ouvir a nota", btn_aflojar:"Afrouxar corda", btn_tensar:"Apertar corda",
+    h_inst:"Instrumento", lbl_idioma:"Idioma", lbl_afin:"Afinação", lbl_cuerda:"Corda a afinar", lbl_a4:"Referência do Lá",
+    aria_a4_menos:"Baixar referência um hertz", aria_a4_mas:"Subir referência um hertz",
+    h_avisos:"Avisos", opt_beep:"Guia com som", opt_vib:"Vibrar ao afinar e a cada bipe (só Android)",
+    opt_vib_no:"Vibração: este celular ou navegador não permite",
+    lbl_guia:"Tipo de guia sonora", opt_park:"Sensor de estacionamento: bipes com a sua nota, mais rápidos ao chegar perto", opt_bend:"Bend: a sua nota desliza até a afinada",
+    lbl_voz:"Quem fala", opt_tts:"A voz do afinador", opt_sr:"Meu leitor de tela (VoiceOver ou TalkBack)", opt_off:"Ninguém, só bipes",
+    lbl_auto:"Dizer os cents sozinho", opt_auto0:"Não, só quando toco Quanto falta?", opt_auto25:"A cada 2,5 segundos", opt_auto5:"A cada 5 segundos",
+    lbl_tol:"Margem para dizer afinado", opt_tol2:"±2 cents (exigente)", opt_tol10:"±10 cents (rápido)",
+    lbl_nombres:"Nomes das notas", opt_sol:"Dó, Ré, Mi", opt_practica:"Modo prática sem microfone",
+    como:"Como usar",
+    como_txt:"Toque em qualquer parte do quadro grande. O app pergunta uma coisa de cada vez: o que você vai afinar, a afinação e como quer ser guiado. Responda falando depois do tique; se disser várias coisas juntas, ele pula o que você já respondeu. Na próxima vez lembra o que você escolheu e só pergunta se quer continuar igual. Enquanto afina, toque na tela para pausar e pedir o que quiser: continuar, quanto falta, ouvir a nota, outro instrumento, outro modo ou terminar. Para mudar de idioma diga español ou english. Há dois modos de guia. Sensor de estacionamento: bipes com a mesma nota que você está tocando, mais rápidos ao chegar perto. Bend: cada bipe começa na sua nota e desliza até a afinada. Ao chegar, a nota fica fixa, o celular vibra e diz afinado. Funciona melhor com fones de ouvido.",
+    hint_hablar:"Fale depois do tique. Toque para repetir", aria_repetir:"Toque duas vezes para repetir a pergunta",
+    hint_tocar_hablar:"Toque na tela para falar", hint_pausar:"Toque na tela para pausar e falar",
+    hint_cuanto:"Toque na tela para saber quanto falta", hint_empezar:"Toque em qualquer lugar para começar", aria_empezar:"Começar. O app vai falar com você",
+    d_toca:"Toque uma corda", d_escuchando:"Ouvindo", d_lejos:"Longe da corda escolhida", d_muy_lejos:"Muito longe",
+    d_cuerda:"Corda {n}", d_crom:"Cromático", d_afinado:"AFINADO", d_grave:"GRAVE · aperte", d_agudo:"AGUDO · afrouxe",
+    auto:"Automático", cuerda_corta:"{n}ª", sostenido:"sustenido",
+    err_mic:"Não consegui usar o microfone. Verifique se o navegador tem permissão de microfone para esta página. Você também pode ativar o modo prática sem microfone, mais abaixo."
+  }
+};
+const T = (k, n) => ((I18N[S.lang] || I18N.es)[k] ?? I18N.es[k] ?? k).replace("{n}", n);
+function applyI18n(){
+  document.documentElement.lang = S.lang;
+  document.querySelectorAll("[data-i18n]").forEach(el => { el.textContent = T(el.dataset.i18n); });
+  document.querySelectorAll("[data-i18n-aria]").forEach(el => { el.setAttribute("aria-label", T(el.dataset.i18nAria)); });
+  if (!("vibrate" in navigator)) $("optVibTxt").textContent = T("opt_vib_no");
+  tuningSel.textContent = "";
+  TUNINGS.forEach(t => { const o = document.createElement("option"); o.value = t.id; o.textContent = t.name[S.lang] || t.name.es; tuningSel.append(o); });
+  tuningSel.value = S.tuning; $("langSel").value = S.lang;
+  $("startBtn").textContent = running ? T("btn_detener") : practice ? T("btn_practica") : T("btn_empezar");
+  renderStrings();
+}
+async function setLang(l){
+  S.lang = l; save(); applyI18n();
+  if (typeof setTap === "function" && flow === "idle") setTap("hint_empezar", "aria_empezar");
+  vozClips = await Voz.idioma(l); if (vozClips) Voz.precargar();
+}
+
+// ---------- UI setup ----------
+const tuningSel = $("tuningSel");
+
+
+function renderStrings(){
+  const box = $("strings"); box.textContent = "";
+  const t = tuning();
+  $("stringsFs").hidden = t.s.length === 0;
+  const opts = [{v:"auto", label:T("auto")}].concat(t.s.map((m, i) => ({v:String(i), label:`${T("cuerda_corta", stringNumber(i))} · ${noteName(m, true)}`, aria:`${T("d_cuerda", stringNumber(i))}, ${noteName(m)}`})));
+  if (S.string !== "auto" && !(+S.string < t.s.length)) S.string = "auto";
+  opts.forEach(o => {
+    const lab = document.createElement("label"); lab.className = "choice";
+    const inp = document.createElement("input"); inp.type = "radio"; inp.name = "str"; inp.value = o.v; inp.id = "str-" + o.v;
+    if (o.aria) inp.setAttribute("aria-label", o.aria);
+    inp.checked = S.string === o.v;
+    inp.addEventListener("change", () => { S.string = o.v; save(); resetTracking(); });
+    const sp = document.createElement("span"); sp.textContent = o.label; sp.setAttribute("aria-hidden", "true");
+    lab.append(inp, sp); box.append(lab);
+  });
+}
+const bindSel = (id, key, after) => { const el = $(id); el.value = S[key]; el.addEventListener("change", () => { S[key] = el.value; save(); after && after(); }); };
+bindSel("tuningSel", "tuning", () => { S.string = "auto"; renderStrings(); resetTracking(); });
+bindSel("guideSel", "guide"); bindSel("voiceSel", "voice"); bindSel("autoSel", "auto"); bindSel("tolSel", "tol");
+bindSel("namesSel", "names", () => { renderStrings(); });
+$("namesSel").value = S.names || (S.lang === "en" ? "let" : "sol");
+$("langSel").addEventListener("change", e => setLang(e.target.value));
+const bindChk = (id, key) => { const el = $(id); el.checked = !!S[key]; el.addEventListener("change", () => { S[key] = el.checked; save(); }); };
+bindChk("optBeep", "beep"); bindChk("optVib", "vib");
+if (!("vibrate" in navigator)) $("optVib").disabled = true;
+
+function setA4(v){ S.a4 = Math.max(415, Math.min(466, v)); $("a4Out").textContent = S.a4 + " Hz"; save(); }
+setA4(S.a4);
+$("a4Down").addEventListener("click", () => setA4(S.a4 - 1));
+$("a4Up").addEventListener("click", () => setA4(S.a4 + 1));
+
+// ---------- Voz ----------
+// Los mensajes son listas de claves de frases.json. Con audios grabados (voz/) se encadenan clips;
+// sin ellos, se usa la voz del teléfono. Mientras el afinador habla, la detección se pausa.
+let speaking = false, vozClips = false;
+const live = $("live");
+const say = partes => Voz.decir(partes);
+
+// ---------- Audio ----------
+let ctx = null, analyser = null, stream = null, buf = null;
+let muteUntil = 0; // detection pauses while the page itself makes sound, so it does not tune to its own beeps
+function ensureCtx(){
+  if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+  if (ctx.state === "suspended") ctx.resume();
+  return ctx;
+}
+function tone(freq, dur, type = "sine", gain = 0.25, when = 0){
+  const c = ensureCtx(), t0 = c.currentTime + when;
+  const o = c.createOscillator(), g = c.createGain();
+  o.type = type; o.frequency.value = freq;
+  g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(gain, t0 + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  o.connect(g).connect(c.destination); o.start(t0); o.stop(t0 + dur + 0.02);
+  muteUntil = Math.max(muteUntil, performance.now() + (when + dur) * 1000 + 80);
+}
+Voz.init({lang:S.lang, getCtx:ensureCtx, vivo:live,
+  modo:() => S.voice === "tts" ? "app" : S.voice,
+  onBusy:b => { speaking = b; if (!b) muteUntil = performance.now() + 150; }})
+  .then(ok => { vozClips = ok; if (ok) Voz.precargar(); });
+const vib = p => { if (S.vib && "vibrate" in navigator) { try { navigator.vibrate(p); } catch(e) {} } };
+// Moves a phone-audible copy of the played note into the 220-880 Hz range, keeping the cents offset.
+function audible(f){ while (f < 220) f *= 2; while (f > 880) f /= 2; return f; }
+// Bend cue: starts at the pitch you played and glides to the tuned pitch.
+function cueBend(c){
+  const tgt = audible(midiToHz(target.midi)), from = tgt * Math.pow(2, c / 1200);
+  const dur = 0.22, cx = ensureCtx(), t0 = cx.currentTime;
+  const o = cx.createOscillator(), g = cx.createGain();
+  o.type = "triangle";
+  o.frequency.setValueAtTime(from, t0);
+  o.frequency.setValueAtTime(from, t0 + 0.05);
+  o.frequency.exponentialRampToValueAtTime(tgt, t0 + dur);
+  g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(0.3, t0 + 0.01);
+  g.gain.setValueAtTime(0.3, t0 + dur - 0.03); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur + 0.04);
+  o.connect(g).connect(cx.destination); o.start(t0); o.stop(t0 + dur + 0.06);
+  muteUntil = Math.max(muteUntil, performance.now() + (dur + 0.06) * 1000 + 80);
+  vib(c < 0 ? 120 : [40, 60, 40]);
+}
+// Parking-sensor cue: a short beep at the pitch you are playing right now.
+function cuePark(c){
+  if (S.beep) tone(audible(midiToHz(target.midi)) * Math.pow(2, c / 1200), 0.09, "triangle", 0.3);
+  vib(c < 0 ? 120 : [40, 60, 40]);
+}
+// Arrival: the tuned note stays fixed and the phone vibrates, in both modes.
+function cueInTune(){
+  if (S.beep){ tone(audible(midiToHz(target.midi)), 0.9, "triangle", 0.3); }
+  vib([400, 120, 400]);
+}
+function playReference(m){
+  const c = ensureCtx(), f = midiToHz(m), t0 = c.currentTime;
+  [1, 2, 3].forEach((h, i) => {
+    const o = c.createOscillator(), g = c.createGain();
+    o.frequency.value = f * h; const peak = [0.3, 0.12, 0.06][i];
+    g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(peak, t0 + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 2.2);
+    o.connect(g).connect(c.destination); o.start(t0); o.stop(t0 + 2.3);
+  });
+  muteUntil = performance.now() + 2400;
+}
+
+// ---------- Pitch detection (YIN) ----------
+function yin(x, sr, minF, maxF){
+  const W = Math.floor(x.length / 2);
+  const maxTau = Math.min(W - 1, Math.floor(sr / minF)), minTau = Math.max(2, Math.floor(sr / maxF));
+  const d = new Float32Array(maxTau + 2);
+  for (let tau = 1; tau <= maxTau + 1; tau++){
+    let s = 0;
+    for (let i = 0; i < W; i++){ const v = x[i] - x[i + tau]; s += v * v; }
+    d[tau] = s;
+  }
+  let run = 0; d[0] = 1;
+  for (let tau = 1; tau <= maxTau + 1; tau++){ run += d[tau]; d[tau] = run ? d[tau] * tau / run : 1; }
+  let tau = -1;
+  for (let t = minTau; t <= maxTau; t++){
+    if (d[t] < 0.15){ while (t + 1 <= maxTau && d[t + 1] < d[t]) t++; tau = t; break; }
+  }
+  if (tau < 0){ // fall back to the global minimum when it is clear enough
+    let best = 1, bt = -1;
+    for (let t = minTau; t <= maxTau; t++) if (d[t] < best){ best = d[t]; bt = t; }
+    if (best < 0.25) tau = bt; else return -1;
+  }
+  const a = d[tau - 1], b = d[tau], c = d[tau + 1];
+  const den = a - 2 * b + c;
+  const shift = den ? 0.5 * (a - c) / den : 0;
+  return sr / (tau + (Math.abs(shift) < 1 ? shift : 0));
+}
+
+// ---------- Tracking state ----------
+let running = false, practice = false, simCents = 0, simMidi = 40;
+let hist = [], cents = null, target = null, lastTargetKey = null, pendingKey = null, pendingCount = 0;
+let lastFarSay = 0, inTune = false, inTuneSince = 0, lastSignal = 0, nextBeep = 0, lastAuto = 0, timer = null, wake = null;
+
+function resetTracking(){
+  hist = []; cents = null; target = null; lastTargetKey = null; pendingKey = null; pendingCount = 0; inTune = false;
+  if (practice) startPracticeString();
+  if (!running) drawIdle();
+}
+function chooseTarget(f){
+  const t = tuning(), m = hzToMidi(f);
+  if (!t.s.length){ const n = Math.round(m); return {midi:n, idx:-1}; }
+  if (S.string !== "auto"){ const i = +S.string; return {midi:t.s[i], idx:i}; }
+  let bi = 0, bd = Infinity;
+  t.s.forEach((sm, i) => { const dd = Math.abs(m - sm); if (dd < bd){ bd = dd; bi = i; } });
+  return {midi:t.s[bi], idx:bi};
+}
+// Mensajes hablados: la nota se dice como se dice en cada idioma (Do Re Mi; en inglés, C D E).
+const noteKey = m => "note_" + (((m % 12) + 12) % 12);
+const stringParts = tg => tg.idx >= 0 ? ["cuerda_" + stringNumber(tg.idx)] : [];
+const centsParts = c => Math.abs(c) <= +S.tol ? ["w_afinado"]
+  : ["num_" + Math.min(66, Math.round(Math.abs(c))), "w_cents", c < 0 ? "w_grave" : "w_agudo"];
+const readParts = (tg, c) => [...stringParts(tg), noteKey(tg.midi), ...centsParts(c)];
+
+function analyse(){
+  const now = performance.now();
+  let f = -1;
+  if (practice){
+    f = midiToHz(simMidi) * Math.pow(2, simCents / 1200);
+  } else {
+    if (now < muteUntil || speaking) return;
+    analyser.getFloatTimeDomainData(buf);
+    let rms = 0; for (let i = 0; i < buf.length; i++) rms += buf[i] * buf[i];
+    rms = Math.sqrt(rms / buf.length);
+    if (rms > 0.008){
+      const t = tuning();
+      const lo = t.s.length ? midiToHz(Math.min(...t.s)) * 0.6 : 25;
+      const hi = t.s.length ? midiToHz(Math.max(...t.s)) * 1.7 : 2000;
+      f = yin(buf, ctx.sampleRate, Math.max(22, lo), hi);
+    }
+  }
+  if (f <= 0){
+    if (now - lastSignal > 700 && cents !== null){ hist = []; cents = null; inTune = false; pendingKey = null; drawWaiting(); }
+    return;
+  }
+  lastSignal = now;
+  hist.push(f); if (hist.length > 5) hist.shift();
+  const fm = hist.slice().sort((a, b) => a - b)[Math.floor(hist.length / 2)];
+  const tg = chooseTarget(fm);
+  const c = 1200 * Math.log2(fm / midiToHz(tg.midi));
+  if (Math.abs(c) > 350){
+    drawFar(fm);
+    // Far from every string: say what it hears, at most every 4 s, so a blind user is never left in silence.
+    if (now - lastFarSay > 4000){ lastFarSay = now; say(["escucho", noteKey(Math.round(hzToMidi(fm))), "lejos_de", ...stringParts(tg), noteKey(tg.midi)]); }
+    return;
+  }
+  const key = tg.idx + ":" + tg.midi;
+  // Announce a new note only after it holds for 3 frames, so passing noise does not trigger speech.
+  if (key !== lastTargetKey){
+    if (key === pendingKey) pendingCount++; else { pendingKey = key; pendingCount = 1; }
+    if (pendingCount < 3) return;
+    lastTargetKey = key; target = tg; cents = c; inTune = false;
+    say(readParts(tg, c));
+    nextBeep = now + 900; lastAuto = now;
+  }
+  target = tg;
+  cents = cents === null ? c : cents + 0.35 * (c - cents);
+  const tol = +S.tol;
+  if (!inTune && Math.abs(cents) <= tol){
+    if (!inTuneSince) inTuneSince = now;
+    if (now - inTuneSince > 300){ inTune = true; cueInTune(); say(["w_afinado"]); }
+  } else if (Math.abs(cents) > tol) inTuneSince = 0;
+  if (inTune && Math.abs(cents) > tol + 3){ inTune = false; inTuneSince = 0; }
+  if (!inTune && !speaking && now >= nextBeep){
+    if (S.guide === "bend" && S.beep) cueBend(cents); else cuePark(cents);
+    // Parking-sensor rhythm: farther away = slower beeps.
+    nextBeep = now + Math.max(170, Math.min(900, 140 + Math.abs(cents) * 16));
+  }
+  if (+S.auto && now - lastAuto > +S.auto && !inTune){ lastAuto = now; say(centsParts(cents)); }
+  draw();
+}
+
+// ---------- Drawing ----------
+const noteEl = $("note"), strEl = $("stringLbl"), stateEl = $("state"), centsEl = $("cents"), needle = $("needle");
+function drawIdle(){ noteEl.textContent = "–"; strEl.innerHTML = "&nbsp;"; stateEl.innerHTML = "&nbsp;"; stateEl.className = "state"; centsEl.innerHTML = "&nbsp;"; needle.style.left = "50%"; }
+function drawWaiting(){ noteEl.textContent = "–"; strEl.textContent = T("d_toca"); stateEl.textContent = T("d_escuchando"); stateEl.className = "state"; centsEl.innerHTML = "&nbsp;"; needle.style.left = "50%"; }
+function drawFar(f){ const m = Math.round(hzToMidi(f)); noteEl.textContent = noteName(m, true); strEl.textContent = T("d_lejos"); stateEl.textContent = T("d_muy_lejos"); stateEl.className = "state"; centsEl.innerHTML = "&nbsp;"; }
+function draw(){
+  if (!target) return;
+  noteEl.textContent = noteName(target.midi, true);
+  strEl.textContent = target.idx >= 0 ? T("d_cuerda", stringNumber(target.idx)) : T("d_crom");
+  const tol = +S.tol;
+  if (inTune || Math.abs(cents) <= tol){ stateEl.textContent = T("d_afinado"); stateEl.className = "state ok"; }
+  else if (cents < 0){ stateEl.textContent = T("d_grave"); stateEl.className = "state flat"; }
+  else { stateEl.textContent = T("d_agudo"); stateEl.className = "state sharp"; }
+  centsEl.textContent = (cents > 0 ? "+" : "") + Math.round(cents) + " cents";
+  needle.style.left = (50 + Math.max(-50, Math.min(50, cents))) + "%";
+}
+
+// ---------- Practice mode ----------
+function startPracticeString(){
+  const t = tuning();
+  if (t.s.length){ const i = S.string === "auto" ? Math.floor(Math.random() * t.s.length) : +S.string; simMidi = t.s[i]; }
+  else simMidi = 57 + Math.floor(Math.random() * 12);
+  simCents = (Math.random() < 0.5 ? -1 : 1) * (15 + Math.random() * 35);
+}
+$("optPractice").addEventListener("change", e => {
+  const on = e.target.checked;
+  if (running) stop();
+  practice = on; $("practiceCtl").hidden = !on;
+  $("startBtn").textContent = on ? T("btn_practica") : T("btn_empezar");
+});
+let holdT = null;
+function nudge(d){ simCents += d; }
+[["upBtn", 2], ["downBtn", -2]].forEach(([id, d]) => {
+  const b = $(id);
+  b.addEventListener("click", () => nudge(d));
+  b.addEventListener("pointerdown", () => { clearInterval(holdT); holdT = setInterval(() => nudge(d), 120); });
+  ["pointerup", "pointerleave", "pointercancel"].forEach(ev => b.addEventListener(ev, () => clearInterval(holdT)));
+});
+
+// ---------- Start / stop ----------
+async function start(silent){
+  $("err").hidden = true;
+  ensureCtx();
+  if (!practice){
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false, noiseSuppression:false, autoGainControl:false}});
+    } catch(e){
+      const m = T("err_mic");
+      $("err").textContent = m; $("err").hidden = false;
+      say(["sin_mic"]);
+      return false;
+    }
+    const src = ctx.createMediaStreamSource(stream);
+    analyser = ctx.createAnalyser(); analyser.fftSize = 4096;
+    buf = new Float32Array(analyser.fftSize);
+    src.connect(analyser);
+  } else startPracticeString();
+  try { wake = await navigator.wakeLock?.request("screen"); } catch(e) {}
+  running = true; resetTracking(); drawWaiting();
+  $("startBtn").textContent = T("btn_detener");
+  if (!silent) say(practice ? ["practica"] : ["tocar_cuerda"]);
+  timer = setInterval(analyse, 50);
+  return true;
+}
+function stop(silent){
+  running = false; clearInterval(timer);
+  if (stream){ stream.getTracks().forEach(t => t.stop()); stream = null; }
+  try { wake && wake.release(); } catch(e) {}
+  $("startBtn").textContent = practice ? T("btn_practica") : T("btn_empezar");
+  drawIdle(); if (!silent) say(["detenido"]);
+}
+$("startBtn").addEventListener("click", () => running ? stop() : start());
+$("askBtn").addEventListener("click", () => {
+  if (!running){ say(["tocar_cuerda"]); return; }
+  if (!target || cents === null){ say(["ninguna_nota"]); return; }
+  say(readParts(target, cents));
+});
+$("refBtn").addEventListener("click", () => {
+  const t = tuning();
+  let m;
+  if (target) m = target.midi;
+  else if (t.s.length) m = t.s[S.string === "auto" ? 0 : +S.string];
+  else m = 69;
+  playReference(m);
+  say([noteKey(m)]);
+});
+
+// ---------- Conversación por voz ----------
+// Un toque en cualquier parte empieza (el navegador exige un toque antes de sonar y de escuchar).
+// La app pregunta de a una cosa: qué vas a afinar, después la afinación (si el instrumento tiene varias)
+// y la primera vez cómo querés que te guíe. Si en una respuesta ya decís varias cosas
+// ("guitarra un tono abajo con bend"), se saltea lo que ya contestaste.
+// Se puede cambiar de idioma en cualquier momento diciendo "english", "português" o "español".
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const tapEl = $("tap"), hintEl = $("hint");
+let flow = "idle", qctx = null, misses = 0, rec = null, lastReading = null, askId = 0, pend = null;
+
+function setTap(hintKey, ariaKey){ hintEl.textContent = T(hintKey); tapEl.setAttribute("aria-label", T(ariaKey || hintKey)); }
+function syncUI(){ tuningSel.value = S.tuning; $("guideSel").value = S.guide; renderStrings(); setA4(S.a4); save(); }
+function abortRec(){ try { rec && rec.abort(); } catch(e) {} rec = null; tapEl.classList.remove("listening"); }
+
+// Lo que se pregunta en cada momento, y lo que se dice si no se entendió.
+const QUESTION = {
+  open:    () => ["pregunta_instrumento"],
+  welcome: () => ["seguimos_igual"],
+  tuning:  () => ["pregunta_afin_" + (pend && pend.inst || "gtr")],
+  mode:    () => ["pregunta_modo"],
+  a4:      () => ["pregunta_a4"],
+  menu:    () => ["pausa"]
+};
+const ASK_AGAIN = {
+  open:    () => ["no_entendi_instr"],
+  welcome: () => ["no_entendi", "pregunta_instrumento"],
+  tuning:  () => ["no_entendi_afin"],
+  mode:    () => ["no_entendi", "pregunta_modo"],
+  a4:      () => ["no_entendi", "pregunta_a4"],
+  menu:    () => ["no_entendi", "pausa"]
+};
+// Palabra del instrumento en cada idioma: "cinco" en la pregunta de cuerdas del bajo se entiende como "bajo cinco".
+const INST_WORD = {
+  es: {gtr:"guitarra", bass:"bajo", uke:"ukelele"},
+  en: {gtr:"guitar", bass:"bass", uke:"ukulele"},
+  pt: {gtr:"violão", bass:"baixo", uke:"ukulele"}
+};
+const SR_LANG = {es:"es-AR", en:"en-US", pt:"pt-BR"};
+const recLang = () => (navigator.language || "").toLowerCase().startsWith(S.lang) && /-/.test(navigator.language) ? navigator.language : SR_LANG[S.lang];
+
+// Dice algo y después escucha la respuesta.
+async function ask(ctxName, parts){
+  abortRec(); const id = ++askId;
+  flow = "asking"; qctx = ctxName;
+  setTap("hint_hablar", "aria_repetir");
+  await say(parts);
+  if (id === askId && flow === "asking") listen(ctxName);
+}
+function listen(ctxName){
+  if (!SR){ noVoice(); return; }
+  abortRec();
+  const r = new SR(); rec = r;
+  r.lang = recLang(); r.interimResults = false; r.maxAlternatives = 5; r.continuous = false;
+  let got = false;
+  r.onresult = e => { got = true; heard([...e.results[0]].map(a => a.transcript), ctxName); };
+  r.onerror = e => { if (/not-allowed|service-not-allowed|audio-capture/.test(e.error)){ got = true; noVoice(); } };
+  r.onend = () => { tapEl.classList.remove("listening"); if (!got && flow === "asking" && rec === r) fail(ctxName); };
+  tone(1400, 0.05, "sine", 0.2); // el "tic": ya podés hablar
+  setTimeout(() => { try { r.start(); tapEl.classList.add("listening"); } catch(e){ noVoice(); } }, 120);
+}
+function fail(ctxName){
+  misses++;
+  if (misses >= 3){ misses = 0; flow = "waitTap"; setTap("hint_tocar_hablar"); say(["no_te_escucho"]); return; }
+  ask(ctxName, ASK_AGAIN[ctxName]());
+}
+async function noVoice(){
+  // Este navegador no entiende voz: se afina con lo último elegido y un toque dice cuánto falta.
+  flow = "tuning"; await say(["sin_voz"]); goTune(true);
+}
+
+// Junta lo que la persona va contestando, pregunta lo que falta de a una cosa, y al final aplica todo.
+function collect(p){
+  pend = pend || {};
+  if (p.tuning){ pend.tuning = p.tuning; pend.inst = p.instrument; pend.tuningSaid = p.tuningSaid; }
+  if (p.mode) pend.mode = p.mode;
+  if (p.a4 !== null) pend.a4 = p.a4;
+}
+function nextStep(){
+  if (pend.tuning && !pend.tuningSaid && INST_WORD.es[pend.inst]) return ask("tuning", QUESTION.tuning());
+  if (!pend.mode && !S.modeChosen) return ask("mode", QUESTION.mode());
+  const p = pend; pend = null; return apply(p);
+}
+
+// Aplica lo elegido y confirma en voz alta solo lo que cambió.
+async function apply(p){
+  if (p.tuning){ S.tuning = p.tuning; S.string = "auto"; }
+  if (p.mode){ S.guide = p.mode; S.modeChosen = true; }
+  if (p.a4 !== undefined) setA4(p.a4);
+  S.setup = true; syncUI(); misses = 0;
+  const parts = ["perfecto"];
+  if (p.tuning) parts.push("tuning_" + S.tuning);
+  if (p.mode) parts.push("mode_" + S.guide);
+  if (p.a4 !== undefined) parts.push("la_en", "w_400", "num_" + (p.a4 - 400), "w_hercios");
+  if (!S.tipShown){ S.tipShown = true; save(); parts.push("tip_pausa"); }
+  parts.push("tocar_cuerda");
+  flow = "tuning";
+  setTap(SR ? "hint_pausar" : "hint_cuanto");
+  await say(parts);
+  if (flow === "tuning" && !running) start(true);
+}
+
+// Cambio de idioma: textos, voz y reconocimiento pasan al idioma nuevo, y se repite la pregunta en ese idioma.
+async function switchLang(l, ctxName){
+  await setLang(l);
+  const parts = ["idioma_ok"].concat(ctxName === "menu" || ctxName === "open" || ctxName === "tuning" || ctxName === "mode" || ctxName === "a4"
+    ? QUESTION[ctxName]() : QUESTION.open());
+  return ask(ctxName === "welcome" ? "open" : ctxName, parts);
+}
+
+function heard(alts, ctxName){
+  const p = Interprete.parseAlternatives(alts, S.lang);
+  const slot = p.instrument || p.mode || p.a4 !== null;
+  if (p.lang && p.lang !== S.lang) return switchLang(p.lang, ctxName);
+  if (p.cmd === "repeat"){ ask(ctxName, QUESTION[ctxName]()); return; }
+  if (p.cmd === "end" && ctxName !== "open"){ pend = null; endAll(); return; }
+
+  if (ctxName === "tuning"){
+    // La respuesta se entiende junto con el instrumento: "cinco" es "bajo de cinco", "drop D" es "guitarra drop D".
+    const q = Interprete.parseAlternatives(alts.map(t => INST_WORD[S.lang][pend.inst] + " " + t), S.lang);
+    if (q.instrument === pend.inst && q.tuningSaid){ collect(q); return nextStep(); }
+    if (q.instrument && q.instrument !== pend.inst){ collect(q); return nextStep(); } // cambió de instrumento
+    if (p.yes !== null || p.cmd === "go"){ pend.tuningSaid = true; if (q.mode) pend.mode = q.mode; return nextStep(); } // "sí", "no sé": estándar
+    return fail(ctxName);
+  }
+  if (ctxName === "mode"){
+    if (p.mode){ collect(p); return pend ? nextStep() : apply(p); }
+    if (p.instrument){ collect(p); return nextStep(); }
+    return fail(ctxName);
+  }
+  if (ctxName === "a4"){ if (p.a4 !== null) return apply({a4: p.a4}); return fail(ctxName); }
+  if (ctxName === "welcome"){
+    if (slot){ pend = null; collect(p); return nextStep(); }
+    if (p.yes === true || p.cmd === "go"){ misses = 0; flow = "tuning"; return say(["perfecto", "tocar_cuerda"]).then(() => { if (flow === "tuning" && !running) start(true); }); }
+    if (p.yes === false || p.cmd === "inst"){ pend = null; return ask("open", QUESTION.open()); }
+    return fail(ctxName);
+  }
+  if (ctxName === "open"){
+    if (slot){ collect(p); return nextStep(); }
+    if (p.cmd === "help") return ask("open", ["no_entendi_instr"]);
+    return fail(ctxName);
+  }
+
+  // Menú de pausa: se puede decir cualquier cosa, incluso un instrumento nuevo de una.
+  if (slot){ pend = null; collect(p); return nextStep(); }
+  switch (p.cmd){
+    case "go": return goTune();
+    case "cents": return say(lastReading || ["todavia_nada"]).then(() => goTune());
+    case "ref": {
+      const m = lastTarget ? lastTarget.midi : (tuning().s[0] || 69);
+      return say(["nota_ref"]).then(() => { playReference(m); setTimeout(goTune, 2600); });
+    }
+    case "inst": pend = null; return ask("open", QUESTION.open());
+    case "mode": pend = {}; return ask("mode", QUESTION.mode());
+    case "a4": return ask("a4", QUESTION.a4());
+    case "help": return ask("menu", QUESTION.menu());
+    case "end": return endAll();
+  }
+  return fail(ctxName);
+}
+
+async function goTune(silent){
+  flow = "tuning";
+  setTap(SR ? "hint_pausar" : "hint_cuanto");
+  if (!silent) await say(["tocar_cuerda"]);
+  if (!running){ const ok = await start(true); if (!ok){ flow = "idle"; setTap("hint_empezar", "aria_empezar"); } }
+}
+function pauseToTalk(){
+  lastReading = target && cents !== null ? readParts(target, cents) : null;
+  lastTarget = target;
+  stop(true); // libera el micrófono para que pueda escucharte
+  misses = 0; ask("menu", QUESTION.menu());
+}
+function endAll(){
+  abortRec(); if (running) stop(true);
+  flow = "idle"; setTap("hint_empezar", "aria_empezar");
+  return say(["listo_termine"]);
+}
+let lastTarget = null;
+
+tapEl.addEventListener("click", () => {
+  ensureCtx(); if (vozClips) Voz.precargar();
+  if (flow === "idle"){
+    misses = 0; pend = null;
+    if (S.setup) ask("welcome", ["hola_vuelta", "tuning_" + S.tuning, "mode_" + S.guide, "seguimos_igual"]);
+    else ask("open", ["hola_primera"]);
+  }
+  else if (flow === "asking" || flow === "waitTap"){ const c = qctx || "open"; ask(c, QUESTION[c]()); }
+  else if (flow === "tuning"){
+    if (SR && !practice) pauseToTalk();
+    else say(target && cents !== null ? readParts(target, cents) : ["ninguna_nota"]);
+  }
+});
+setTap("hint_empezar", "aria_empezar");
+
+applyI18n();
+drawIdle();
+})();
+</script>
+
+</body></html>
